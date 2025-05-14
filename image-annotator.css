@@ -1,4 +1,4 @@
-@import url('../svg-image-viewer/svg-image-viewer.css');
+@import url('./svg-image-viewer/svg-image-viewer.css');
 /* image-annotator.css - v8 */
 
 * {
@@ -153,6 +153,7 @@ image-annotator {
   bottom: 10px;
   right: 10px;
   z-index: 100;
+  display: none;
 }
 
 .shortcut-tooltip {

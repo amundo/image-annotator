@@ -1,5 +1,6 @@
-import { SVGImageViewer } from '../svg-image-viewer/SVGImageViewer.js';
-/* ImageAnnotator.js - v19 */
+import { SVGImageViewer } from './svg-image-viewer/SVGImageViewer.js';
+
+/* ImageAnnotator.js - v26 */
 class ImageAnnotator extends HTMLElement {
   // Annotation types
   static ANNOTATION_TYPES = {
@@ -46,20 +47,12 @@ class ImageAnnotator extends HTMLElement {
   }
   
   disconnectedCallback() {
+    // Remove transform change listener
+    this.svgViewer?.removeEventListener('transform-changed', this.onTransformChanged);
+    
     // Clean up global event listeners
-    if (this._panForceReleaseHandler) {
-      window.removeEventListener('mouseup', this._panForceReleaseHandler, true);
-    }
     if (this._annotationGlobalMouseUpHandler) {
       window.removeEventListener('mouseup', this._annotationGlobalMouseUpHandler);
-    }
-    
-    // Clean up any remaining event listeners
-    if (this._originalHandlers) {
-      this.svgFigure?.removeEventListener('mousedown', this._originalHandlers.svgMouseDown);
-      this.svgFigure?.removeEventListener('wheel', this._originalHandlers.svgWheel, { passive: false });
-      window.removeEventListener('mousemove', this._originalHandlers.svgMouseMove);
-      window.removeEventListener('mouseup', this._originalHandlers.svgMouseUp);
     }
   }
 
@@ -171,36 +164,25 @@ class ImageAnnotator extends HTMLElement {
       // Store reference to the transform group to sync transformations
       this.transformGroup = transformGroup;
       
-      // Store original event handlers from the SVG viewer
-      this.storeOriginalEventHandlers();
+      // Listen for transform changes in the SVG viewer
+      this.svgViewer.addEventListener('transform-changed', this.onTransformChanged);
       
       // Setup additional event listeners specific to annotation
       this.setupAnnotationEvents();
     }, 100);
   }
   
+  onTransformChanged = (e) => {
+    // Apply the same transform to our annotation layer
+    if (this.transformGroup && this.annotationLayer) {
+      const transform = this.transformGroup.getAttribute('transform');
+      this.annotationLayer.setAttribute('transform', transform);
+    }
+  }
+  
   // Store event handlers for proper management
   storeOriginalEventHandlers() {
-    // Get SVG element references
-    this.svgElement = this.svgViewer.querySelector('svg');
-    this.svgFigure = this.svgViewer.querySelector('figure') || this.svgElement;
-    
-    // Create bound handlers that we can add and remove
-    this._originalHandlers = {
-      svgMouseDown: this.svgViewer.onPointerDown.bind(this.svgViewer),
-      svgMouseMove: this.svgViewer.onPointerMove.bind(this.svgViewer),
-      svgMouseUp: this.svgViewer.onPointerUp.bind(this.svgViewer),
-      svgWheel: this.svgViewer.onWheel.bind(this.svgViewer)
-    };
-    
-    // Remove the original handlers to avoid duplication
-    this.svgFigure.removeEventListener('mousedown', this.svgViewer.onPointerDown);
-    this.svgFigure.removeEventListener('wheel', this.svgViewer.onWheel, { passive: false });
-    window.removeEventListener('mousemove', this.svgViewer.onPointerMove);
-    window.removeEventListener('mouseup', this.svgViewer.onPointerUp);
-    
-    // Add our own controlled handlers
-    this.enableSvgViewerPanning();
+    // No need to store handlers as we'll use the SVGImageViewer's setPanningEnabled() API
   }
 
   attachEvents() {
@@ -374,40 +356,13 @@ class ImageAnnotator extends HTMLElement {
   }
   
   enableSvgViewerPanning() {
-    // Add the appropriate event listeners
-    this.svgFigure.addEventListener('mousedown', this._originalHandlers.svgMouseDown);
-    this.svgFigure.addEventListener('wheel', this._originalHandlers.svgWheel, { passive: false });
-    window.addEventListener('mousemove', this._originalHandlers.svgMouseMove);
-    window.addEventListener('mouseup', this._originalHandlers.svgMouseUp);
-    
-    // Update UI to indicate pan mode
-    this.svg.classList.add('pan-mode');
-    this.svg.classList.remove('select-mode', 'drawing-mode');
-    
-    // Add an explicit force-release handler
-    if (!this._panForceReleaseHandler) {
-      this._panForceReleaseHandler = () => {
-        if (this.svgViewer.isDragging) {
-          this.svgViewer.isDragging = false;
-          this.svgFigure.classList.remove('dragging');
-          this.svg.classList.remove('dragging');
-        }
-      };
-      window.addEventListener('mouseup', this._panForceReleaseHandler, true);
-    }
+    // Use the SVG viewer's built-in panning control
+    this.svgViewer.setPanningEnabled(true);
   }
   
   disableSvgViewerPanning() {
-    // Remove all event listeners
-    this.svgFigure.removeEventListener('mousedown', this._originalHandlers.svgMouseDown);
-    this.svgFigure.removeEventListener('wheel', this._originalHandlers.svgWheel, { passive: false });
-    window.addEventListener('mousemove', this._originalHandlers.svgMouseMove);
-    window.addEventListener('mouseup', this._originalHandlers.svgMouseUp);
-    
-    // Ensure any ongoing drag is canceled
-    this.svgViewer.isDragging = false;
-    this.svgFigure.classList.remove('dragging');
-    this.svg.classList.remove('dragging');
+    // Use the SVG viewer's built-in panning control
+    this.svgViewer.setPanningEnabled(false);
   }
 
   deleteAnnotation(element) {
@@ -453,20 +408,6 @@ class ImageAnnotator extends HTMLElement {
       }
     };
     window.addEventListener('mouseup', this._annotationGlobalMouseUpHandler);
-    
-    // Listen for transform changes in the SVG viewer to sync our annotation layer
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'transform') {
-          // Get the current transform of the image layer
-          const transform = this.transformGroup.getAttribute('transform');
-          // Apply the same transform to our annotation layer
-          this.annotationLayer.setAttribute('transform', transform);
-        }
-      });
-    });
-    
-    observer.observe(this.transformGroup, { attributes: true });
     
     // Add keyboard shortcut help
     const helpText = document.createElement('div');
@@ -970,9 +911,9 @@ class ImageAnnotator extends HTMLElement {
   }
 }
 
-
 // Define the custom element
 customElements.define('image-annotator', ImageAnnotator);
+
 export {
   ImageAnnotator
 }
