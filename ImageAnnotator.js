@@ -1,8 +1,17 @@
 import { SVGImageViewer } from '../svg-image-viewer/SVGImageViewer.js';
 
-export class ImageAnnotator extends HTMLElement {
+class ImageAnnotator extends HTMLElement {
   // Annotation types
   static ANNOTATION_TYPES = {
+    RECTANGLE: 'rectangle',
+    ELLIPSE: 'ellipse',
+    POLYGON: 'polygon',
+    TEXT: 'text'
+  };
+
+  static TOOL_MODES = {
+    PAN: 'pan',
+    SELECT: 'select',
     RECTANGLE: 'rectangle',
     ELLIPSE: 'ellipse',
     POLYGON: 'polygon',
@@ -12,7 +21,7 @@ export class ImageAnnotator extends HTMLElement {
   // State variables
   annotations = [];
   currentAnnotation = null;
-  currentType = ImageAnnotator.ANNOTATION_TYPES.RECTANGLE;
+  currentMode = ImageAnnotator.TOOL_MODES.PAN; // Default to pan mode
   isDrawing = false;
   startPoint = { x: 0, y: 0 };
   polygonPoints = [];
@@ -41,36 +50,74 @@ export class ImageAnnotator extends HTMLElement {
       <div class="image-annotator">
         <div class="toolbar">
           <div class="tool-group">
-            <button class="tool" data-tool="${ImageAnnotator.ANNOTATION_TYPES.RECTANGLE}">Rectangle</button>
-            <button class="tool" data-tool="${ImageAnnotator.ANNOTATION_TYPES.ELLIPSE}">Ellipse</button>
-            <button class="tool" data-tool="${ImageAnnotator.ANNOTATION_TYPES.POLYGON}">Polygon</button>
-            <button class="tool" data-tool="${ImageAnnotator.ANNOTATION_TYPES.TEXT}">Text</button>
-          </div>
-          <div class="mode-group">
-            <label class="mode-toggle">
-              <input type="checkbox" class="edit-mode-toggle">
-              Edit Mode
-            </label>
-            <span class="mode-hint">(Hold Alt/Ctrl to pan while editing)</span>
+            <button class="tool active" data-tool="${ImageAnnotator.TOOL_MODES.PAN}" title="Pan Tool (P)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 15l4-8 4 8M12 7v8"></path>
+                <path d="M17 13h1a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-1M9 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1"></path>
+              </svg>
+            </button>
+            <button class="tool" data-tool="${ImageAnnotator.TOOL_MODES.SELECT}" title="Select Tool (S)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 13l5 5 11-11"></path>
+              </svg>
+            </button>
+            <button class="tool" data-tool="${ImageAnnotator.TOOL_MODES.RECTANGLE}" title="Rectangle Tool (R)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="1"></rect>
+              </svg>
+            </button>
+            <button class="tool" data-tool="${ImageAnnotator.TOOL_MODES.ELLIPSE}" title="Ellipse Tool (E)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="8"></circle>
+              </svg>
+            </button>
+            <button class="tool" data-tool="${ImageAnnotator.TOOL_MODES.POLYGON}" title="Polygon Tool (G)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 4l8 8-8 8-8-8z"></path>
+              </svg>
+            </button>
+            <button class="tool" data-tool="${ImageAnnotator.TOOL_MODES.TEXT}" title="Text Tool (T)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 7h16M12 7v10M7 17h10"></path>
+              </svg>
+            </button>
           </div>
           <div class="style-group">
             <label>
-              Stroke:
-              <input type="color" class="stroke-color" value="${this.options.strokeColor}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" stroke-dasharray="2"></circle>
+              </svg>
+              <input type="color" class="stroke-color" value="${this.options.strokeColor}" title="Stroke Color">
             </label>
             <label>
-              Fill:
-              <input type="color" class="fill-color" value="#ff0000">
-              <input type="range" class="fill-opacity" min="0" max="100" value="20">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fill-opacity="0.2"></rect>
+              </svg>
+              <input type="color" class="fill-color" value="#ff0000" title="Fill Color">
+              <input type="range" class="fill-opacity" min="0" max="100" value="20" title="Fill Opacity">
             </label>
           </div>
           <div class="action-group">
-            <button class="action" data-action="clear">Clear All</button>
-            <button class="action" data-action="export">Export Data</button>
+            <button class="action" data-action="clear" title="Clear All Annotations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Clear
+            </button>
+            <button class="action" data-action="export" title="Export Annotations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path>
+              </svg>
+              Export
+            </button>
           </div>
         </div>
         <div class="editor-container">
           <svg-image-viewer></svg-image-viewer>
+          <div class="status-bar">
+            <span class="current-tool">Pan Tool</span>
+            <span class="hint">Press Escape to cancel drawing. Double-click to complete polygon.</span>
+          </div>
         </div>
       </div>
     `;
@@ -78,14 +125,8 @@ export class ImageAnnotator extends HTMLElement {
     this.editorContainer = this.querySelector('.editor-container');
     this.svgViewer = this.querySelector('svg-image-viewer');
     this.toolbar = this.querySelector('.toolbar');
-    
-    // Setup mode toggle
-    const modeToggle = this.querySelector('.edit-mode-toggle');
-    if (modeToggle) {
-      modeToggle.addEventListener('change', (e) => {
-        this.setEditingMode(e.target.checked);
-      });
-    }
+    this.statusBar = this.querySelector('.status-bar');
+    this.currentToolDisplay = this.querySelector('.current-tool');
   }
 
   setupSVGViewer() {
@@ -122,19 +163,7 @@ export class ImageAnnotator extends HTMLElement {
     this.toolbar.addEventListener('click', (e) => {
       const toolButton = e.target.closest('.tool');
       if (toolButton) {
-        // Remove active class from all tools
-        this.querySelectorAll('.tool').forEach(btn => btn.classList.remove('active'));
-        // Add active class to selected tool
-        toolButton.classList.add('active');
-        // Set current tool
-        this.currentType = toolButton.dataset.tool;
-        
-        // Automatically enable editing mode when selecting a tool
-        const editModeToggle = this.querySelector('.edit-mode-toggle');
-        if (editModeToggle && !editModeToggle.checked) {
-          editModeToggle.checked = true;
-          this.setEditingMode(true);
-        }
+        this.setToolMode(toolButton.dataset.tool);
       }
 
       // Action buttons
@@ -179,6 +208,39 @@ export class ImageAnnotator extends HTMLElement {
     
     // Key events for keyboard shortcuts
     window.addEventListener('keydown', (e) => {
+      // Ignore if inside input fields
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      // Tool keyboard shortcuts
+      switch(e.key.toLowerCase()) {
+        case 'p': // Pan tool
+          this.setToolMode(ImageAnnotator.TOOL_MODES.PAN);
+          e.preventDefault();
+          break;
+        case 's': // Select tool
+          this.setToolMode(ImageAnnotator.TOOL_MODES.SELECT);
+          e.preventDefault();
+          break;
+        case 'r': // Rectangle tool
+          this.setToolMode(ImageAnnotator.TOOL_MODES.RECTANGLE);
+          e.preventDefault();
+          break;
+        case 'e': // Ellipse tool
+          this.setToolMode(ImageAnnotator.TOOL_MODES.ELLIPSE);
+          e.preventDefault();
+          break;
+        case 'g': // Polygon tool
+          this.setToolMode(ImageAnnotator.TOOL_MODES.POLYGON);
+          e.preventDefault();
+          break;
+        case 't': // Text tool
+          this.setToolMode(ImageAnnotator.TOOL_MODES.TEXT);
+          e.preventDefault();
+          break;
+      }
+      
       // Escape key to cancel drawing
       if (e.key === 'Escape') {
         if (this.isDrawing && this.currentAnnotation) {
@@ -193,10 +255,103 @@ export class ImageAnnotator extends HTMLElement {
       }
       
       // Delete key to remove selected annotation
-      if (e.key === 'Delete' && this.selectedAnnotation) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedAnnotation) {
         this.deleteAnnotation(this.selectedAnnotation);
+        e.preventDefault();
       }
     });
+  }
+  
+  setToolMode(mode) {
+    // First update the mode
+    this.currentMode = mode;
+    
+    // Update toolbar UI - set active class
+    this.querySelectorAll('.tool').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tool === mode);
+    });
+    
+    // Update cursor styles based on mode
+    this.svg.classList.remove('pan-mode', 'select-mode', 'drawing-mode');
+    
+    // Configure SVG viewer based on mode
+    if (mode === ImageAnnotator.TOOL_MODES.PAN) {
+      // Enable panning in SVG viewer
+      this.enableSvgViewerPanning();
+      this.svg.classList.add('pan-mode');
+      this.currentToolDisplay.textContent = 'Pan Tool';
+    } else if (mode === ImageAnnotator.TOOL_MODES.SELECT) {
+      // Disable panning but enable selection
+      this.disableSvgViewerPanning();
+      this.svg.classList.add('select-mode');
+      this.currentToolDisplay.textContent = 'Select Tool';
+    } else {
+      // Drawing modes
+      this.disableSvgViewerPanning();
+      this.svg.classList.add('drawing-mode');
+      
+      // Update status display
+      switch(mode) {
+        case ImageAnnotator.TOOL_MODES.RECTANGLE:
+          this.currentToolDisplay.textContent = 'Rectangle Tool';
+          break;
+        case ImageAnnotator.TOOL_MODES.ELLIPSE:
+          this.currentToolDisplay.textContent = 'Ellipse Tool';
+          break;
+        case ImageAnnotator.TOOL_MODES.POLYGON:
+          this.currentToolDisplay.textContent = 'Polygon Tool';
+          break;
+        case ImageAnnotator.TOOL_MODES.TEXT:
+          this.currentToolDisplay.textContent = 'Text Tool';
+          break;
+      }
+    }
+    
+    // Reset drawing state when changing tools
+    if (this.isDrawing) {
+      if (this.currentAnnotation && this.currentAnnotation.parentNode) {
+        this.currentAnnotation.parentNode.removeChild(this.currentAnnotation);
+      }
+      this.currentAnnotation = null;
+      this.isDrawing = false;
+      this.polygonPoints = [];
+    }
+    
+    // Dispatch event for tool change
+    this.dispatchEvent(new CustomEvent('tool-changed', { 
+      detail: { mode }
+    }));
+  }
+  
+  enableSvgViewerPanning() {
+    // Restore original event handlers
+    if (this.svgViewer._savedHandlers) {
+      for (const [event, handler] of Object.entries(this.svgViewer._savedHandlers)) {
+        this.svgViewer[event] = handler;
+      }
+    }
+  }
+  
+  disableSvgViewerPanning() {
+    // Save original event handlers if not already saved
+    if (!this.svgViewer._savedHandlers) {
+      this.svgViewer._savedHandlers = {
+        onPointerDown: this.svgViewer.onPointerDown,
+        onPointerMove: this.svgViewer.onPointerMove,
+        onPointerUp: this.svgViewer.onPointerUp
+      };
+    }
+    
+    // Replace with no-op versions
+    this.svgViewer.onPointerDown = (e) => { 
+      // Only prevent default if it's our target
+      if (e.target === this.svg || e.target.parentNode === this.annotationLayer) {
+        e.preventDefault(); 
+        e.stopPropagation();
+      }
+    };
+    this.svgViewer.onPointerMove = (e) => {};
+    this.svgViewer.onPointerUp = (e) => {};
   }
 
   deleteAnnotation(element) {
@@ -259,91 +414,51 @@ export class ImageAnnotator extends HTMLElement {
     this.appendChild(helpText);
   }
 
-  // Mode toggles for handling conflicts
-  setEditingMode(enabled) {
-    // Store the current mode
-    this._editingMode = enabled;
-    
-    // Update cursor style to provide visual feedback
-    if (enabled) {
-      this.svg.classList.add('editing-mode');
-      // Temporarily disable dragging in the SVG viewer
-      this.svgViewer._originalOnPointerDown = this.svgViewer.onPointerDown;
-      this.svgViewer.onPointerDown = (e) => {
-        // We'll conditionally allow the event to pass through
-        // based on what element was clicked and if alt/ctrl is pressed
-      };
-    } else {
-      this.svg.classList.remove('editing-mode');
-      // Restore original drag handler in SVG viewer
-      if (this.svgViewer._originalOnPointerDown) {
-        this.svgViewer.onPointerDown = this.svgViewer._originalOnPointerDown;
-        this.svgViewer._originalOnPointerDown = null;
-      }
-    }
-  }
-  
-  get editingMode() {
-    return this._editingMode || false;
-  }
-  
   // Mouse event handlers
   onMouseDown(e) {
     // Only handle left mouse button
     if (e.button !== 0) return;
     
-    // Check if we're holding Alt or Ctrl key for pan override
-    const isPanOverride = e.altKey || e.ctrlKey;
-    
-    // If Alt/Ctrl is pressed, let the SVG viewer handle panning
-    if (isPanOverride) {
-      // Let the original SVG viewer handle it
-      if (this.svgViewer._originalOnPointerDown) {
-        this.svgViewer._originalOnPointerDown(e);
-      }
-      return;
-    }
-    
-    // If target is an annotation, select it regardless of mode
-    if (e.target.classList.contains('annotation')) {
-      this.selectAnnotation(e.target);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-    
-    // If we're not in editing mode, let the SVG viewer handle panning
-    if (!this.editingMode) {
-      if (this.svgViewer._originalOnPointerDown) {
-        this.svgViewer._originalOnPointerDown(e);
-      }
-      return;
-    }
-    
-    // We're in editing mode and not selecting existing annotation
-    // Convert client coordinates to SVG coordinates
+    // Convert coordinates
     const point = this.clientToSvgPoint(e.clientX, e.clientY);
     
-    // Start drawing a new annotation
-    this.isDrawing = true;
-    this.startPoint = point;
-    
-    // Create a new annotation based on the selected tool
-    switch (this.currentType) {
-      case ImageAnnotator.ANNOTATION_TYPES.RECTANGLE:
-        this.currentAnnotation = this.createRectangle(point.x, point.y, 0, 0);
-        break;
-      case ImageAnnotator.ANNOTATION_TYPES.ELLIPSE:
-        this.currentAnnotation = this.createEllipse(point.x, point.y, 0, 0);
-        break;
-      case ImageAnnotator.ANNOTATION_TYPES.POLYGON:
-        // For polygon, we add points as we go
-        if (!this.polygonPoints.length) {
-          this.currentAnnotation = this.createPolygon([point]);
-          this.polygonPoints.push(point);
+    // Different handling based on current tool mode
+    switch (this.currentMode) {
+      case ImageAnnotator.TOOL_MODES.SELECT:
+        if (e.target.classList.contains('annotation')) {
+          this.selectAnnotation(e.target);
+        } else {
+          // Deselect if clicking outside
+          if (this.selectedAnnotation) {
+            this.selectedAnnotation.classList.remove('selected');
+            this.selectedAnnotation = null;
+          }
         }
         break;
-      case ImageAnnotator.ANNOTATION_TYPES.TEXT:
+        
+      case ImageAnnotator.TOOL_MODES.RECTANGLE:
+        this.startDrawing(point);
+        this.currentAnnotation = this.createRectangle(point.x, point.y, 0, 0);
+        break;
+        
+      case ImageAnnotator.TOOL_MODES.ELLIPSE:
+        this.startDrawing(point);
+        this.currentAnnotation = this.createEllipse(point.x, point.y, 0, 0);
+        break;
+        
+      case ImageAnnotator.TOOL_MODES.POLYGON:
+        if (!this.isDrawing) {
+          this.startDrawing(point);
+          this.polygonPoints = [point];
+          this.currentAnnotation = this.createPolygon([point]);
+        } else {
+          // Add a new point to the polygon
+          this.polygonPoints.push(point);
+          this.updatePolygon(this.currentAnnotation, this.polygonPoints);
+        }
+        break;
+        
+      case ImageAnnotator.TOOL_MODES.TEXT:
         const text = prompt('Enter text annotation:');
         if (text) {
           this.currentAnnotation = this.createText(point.x, point.y, text);
@@ -352,59 +467,64 @@ export class ImageAnnotator extends HTMLElement {
         break;
     }
     
-    // Prevent default to avoid any image dragging
+    // Always prevent default for our handled modes
+    if (this.currentMode !== ImageAnnotator.TOOL_MODES.PAN) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+
+  onMouseMove(e) {
+    // Skip if not drawing or no current annotation
+    if (!this.isDrawing || !this.currentAnnotation) return;
+    
+    const point = this.clientToSvgPoint(e.clientX, e.clientY);
+    
+    switch (this.currentMode) {
+      case ImageAnnotator.TOOL_MODES.RECTANGLE:
+        this.updateRectangle(this.currentAnnotation, this.startPoint, point);
+        break;
+        
+      case ImageAnnotator.TOOL_MODES.ELLIPSE:
+        this.updateEllipse(this.currentAnnotation, this.startPoint, point);
+        break;
+        
+      case ImageAnnotator.TOOL_MODES.POLYGON:
+        // Update with a preview of the next potential point
+        const previewPoints = [...this.polygonPoints, point];
+        this.updatePolygon(this.currentAnnotation, previewPoints);
+        break;
+    }
+    
     e.preventDefault();
     e.stopPropagation();
   }
 
-  onMouseMove(e) {
-    // If Alt/Ctrl is pressed for pan override, let the viewer handle it
-    if (e.altKey || e.ctrlKey) return;
-    
-    // Handle annotation drawing
-    if (this.isDrawing && this.currentAnnotation && this.editingMode) {
-      const point = this.clientToSvgPoint(e.clientX, e.clientY);
-      
-      switch (this.currentType) {
-        case ImageAnnotator.ANNOTATION_TYPES.RECTANGLE:
-          this.updateRectangle(this.currentAnnotation, this.startPoint, point);
-          break;
-        case ImageAnnotator.ANNOTATION_TYPES.ELLIPSE:
-          this.updateEllipse(this.currentAnnotation, this.startPoint, point);
-          break;
-        case ImageAnnotator.ANNOTATION_TYPES.POLYGON:
-          // For polygon, we update the preview line to the current point
-          this.updatePolygonPreview(this.currentAnnotation, point);
-          break;
-      }
-      
-      // Prevent default to avoid dragging the image
-      e.preventDefault();
-      e.stopPropagation();
+  onMouseUp(e) {
+    // Only complete drawing for rectangle and ellipse on mouse up
+    if (this.isDrawing && 
+        (this.currentMode === ImageAnnotator.TOOL_MODES.RECTANGLE || 
+         this.currentMode === ImageAnnotator.TOOL_MODES.ELLIPSE)) {
+      this.finishAnnotation();
+      this.isDrawing = false;
     }
+    
+    e.preventDefault();
+    e.stopPropagation();
   }
 
-  onMouseUp(e) {
-    // If Alt/Ctrl was pressed for pan override, don't interfere
-    if (e.altKey || e.ctrlKey) return;
-    
-    if (this.isDrawing && this.editingMode) {
-      // For rectangle and ellipse, we finish on mouse up
-      if (this.currentType !== ImageAnnotator.ANNOTATION_TYPES.POLYGON) {
-        this.finishAnnotation();
-      } else {
-        // For polygon, we add a point on click
-        const point = this.clientToSvgPoint(e.clientX, e.clientY);
-        this.polygonPoints.push(point);
-        this.updatePolygon(this.currentAnnotation, this.polygonPoints);
-      }
-      
+  onDoubleClick(e) {
+    // Double click to complete polygon
+    if (this.currentMode === ImageAnnotator.TOOL_MODES.POLYGON && this.polygonPoints.length > 2) {
+      this.finishAnnotation();
       this.isDrawing = false;
-      
-      // Prevent default to avoid unintended interactions
-      e.preventDefault();
-      e.stopPropagation();
+      this.polygonPoints = [];
     }
+  }
+  
+  startDrawing(point) {
+    this.isDrawing = true;
+    this.startPoint = point;
   }
 
   onDoubleClick(e) {
@@ -776,3 +896,7 @@ export class ImageAnnotator extends HTMLElement {
 
 // Define the custom element
 customElements.define('image-annotator', ImageAnnotator);
+
+export {
+  ImageAnnotator
+}
