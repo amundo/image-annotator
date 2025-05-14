@@ -1,5 +1,5 @@
 import { SVGImageViewer } from '../svg-image-viewer/SVGImageViewer.js';
-
+/* ImageAnnotator.js - v19 */
 class ImageAnnotator extends HTMLElement {
   // Annotation types
   static ANNOTATION_TYPES = {
@@ -43,6 +43,24 @@ class ImageAnnotator extends HTMLElement {
     this.render();
     this.setupSVGViewer();
     this.attachEvents();
+  }
+  
+  disconnectedCallback() {
+    // Clean up global event listeners
+    if (this._panForceReleaseHandler) {
+      window.removeEventListener('mouseup', this._panForceReleaseHandler, true);
+    }
+    if (this._annotationGlobalMouseUpHandler) {
+      window.removeEventListener('mouseup', this._annotationGlobalMouseUpHandler);
+    }
+    
+    // Clean up any remaining event listeners
+    if (this._originalHandlers) {
+      this.svgFigure?.removeEventListener('mousedown', this._originalHandlers.svgMouseDown);
+      this.svgFigure?.removeEventListener('wheel', this._originalHandlers.svgWheel, { passive: false });
+      window.removeEventListener('mousemove', this._originalHandlers.svgMouseMove);
+      window.removeEventListener('mouseup', this._originalHandlers.svgMouseUp);
+    }
   }
 
   render() {
@@ -153,9 +171,36 @@ class ImageAnnotator extends HTMLElement {
       // Store reference to the transform group to sync transformations
       this.transformGroup = transformGroup;
       
+      // Store original event handlers from the SVG viewer
+      this.storeOriginalEventHandlers();
+      
       // Setup additional event listeners specific to annotation
       this.setupAnnotationEvents();
     }, 100);
+  }
+  
+  // Store event handlers for proper management
+  storeOriginalEventHandlers() {
+    // Get SVG element references
+    this.svgElement = this.svgViewer.querySelector('svg');
+    this.svgFigure = this.svgViewer.querySelector('figure') || this.svgElement;
+    
+    // Create bound handlers that we can add and remove
+    this._originalHandlers = {
+      svgMouseDown: this.svgViewer.onPointerDown.bind(this.svgViewer),
+      svgMouseMove: this.svgViewer.onPointerMove.bind(this.svgViewer),
+      svgMouseUp: this.svgViewer.onPointerUp.bind(this.svgViewer),
+      svgWheel: this.svgViewer.onWheel.bind(this.svgViewer)
+    };
+    
+    // Remove the original handlers to avoid duplication
+    this.svgFigure.removeEventListener('mousedown', this.svgViewer.onPointerDown);
+    this.svgFigure.removeEventListener('wheel', this.svgViewer.onWheel, { passive: false });
+    window.removeEventListener('mousemove', this.svgViewer.onPointerMove);
+    window.removeEventListener('mouseup', this.svgViewer.onPointerUp);
+    
+    // Add our own controlled handlers
+    this.enableSvgViewerPanning();
   }
 
   attachEvents() {
@@ -317,6 +362,11 @@ class ImageAnnotator extends HTMLElement {
       this.polygonPoints = [];
     }
     
+    // Make sure dragging is reset if tool changes
+    this.svgViewer.isDragging = false;
+    this.svgFigure?.classList.remove('dragging');
+    this.svg?.classList.remove('dragging');
+    
     // Dispatch event for tool change
     this.dispatchEvent(new CustomEvent('tool-changed', { 
       detail: { mode }
@@ -324,34 +374,40 @@ class ImageAnnotator extends HTMLElement {
   }
   
   enableSvgViewerPanning() {
-    // Restore original event handlers
-    if (this.svgViewer._savedHandlers) {
-      for (const [event, handler] of Object.entries(this.svgViewer._savedHandlers)) {
-        this.svgViewer[event] = handler;
-      }
+    // Add the appropriate event listeners
+    this.svgFigure.addEventListener('mousedown', this._originalHandlers.svgMouseDown);
+    this.svgFigure.addEventListener('wheel', this._originalHandlers.svgWheel, { passive: false });
+    window.addEventListener('mousemove', this._originalHandlers.svgMouseMove);
+    window.addEventListener('mouseup', this._originalHandlers.svgMouseUp);
+    
+    // Update UI to indicate pan mode
+    this.svg.classList.add('pan-mode');
+    this.svg.classList.remove('select-mode', 'drawing-mode');
+    
+    // Add an explicit force-release handler
+    if (!this._panForceReleaseHandler) {
+      this._panForceReleaseHandler = () => {
+        if (this.svgViewer.isDragging) {
+          this.svgViewer.isDragging = false;
+          this.svgFigure.classList.remove('dragging');
+          this.svg.classList.remove('dragging');
+        }
+      };
+      window.addEventListener('mouseup', this._panForceReleaseHandler, true);
     }
   }
   
   disableSvgViewerPanning() {
-    // Save original event handlers if not already saved
-    if (!this.svgViewer._savedHandlers) {
-      this.svgViewer._savedHandlers = {
-        onPointerDown: this.svgViewer.onPointerDown,
-        onPointerMove: this.svgViewer.onPointerMove,
-        onPointerUp: this.svgViewer.onPointerUp
-      };
-    }
+    // Remove all event listeners
+    this.svgFigure.removeEventListener('mousedown', this._originalHandlers.svgMouseDown);
+    this.svgFigure.removeEventListener('wheel', this._originalHandlers.svgWheel, { passive: false });
+    window.addEventListener('mousemove', this._originalHandlers.svgMouseMove);
+    window.addEventListener('mouseup', this._originalHandlers.svgMouseUp);
     
-    // Replace with no-op versions
-    this.svgViewer.onPointerDown = (e) => { 
-      // Only prevent default if it's our target
-      if (e.target === this.svg || e.target.parentNode === this.annotationLayer) {
-        e.preventDefault(); 
-        e.stopPropagation();
-      }
-    };
-    this.svgViewer.onPointerMove = (e) => {};
-    this.svgViewer.onPointerUp = (e) => {};
+    // Ensure any ongoing drag is canceled
+    this.svgViewer.isDragging = false;
+    this.svgFigure.classList.remove('dragging');
+    this.svg.classList.remove('dragging');
   }
 
   deleteAnnotation(element) {
@@ -383,6 +439,21 @@ class ImageAnnotator extends HTMLElement {
     this.svg.addEventListener('mouseup', this.onMouseUp.bind(this));
     this.svg.addEventListener('dblclick', this.onDoubleClick.bind(this));
     
+    // Add a global mouseup handler to ensure we don't miss mouse releases
+    this._annotationGlobalMouseUpHandler = (e) => {
+      if (this.isDrawing) {
+        const point = this.clientToSvgPoint(e.clientX, e.clientY);
+        
+        // Only finish for rectangle and ellipse
+        if (this.currentMode === ImageAnnotator.TOOL_MODES.RECTANGLE || 
+            this.currentMode === ImageAnnotator.TOOL_MODES.ELLIPSE) {
+          this.finishAnnotation();
+          this.isDrawing = false;
+        }
+      }
+    };
+    window.addEventListener('mouseup', this._annotationGlobalMouseUpHandler);
+    
     // Listen for transform changes in the SVG viewer to sync our annotation layer
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -404,7 +475,12 @@ class ImageAnnotator extends HTMLElement {
       <div class="shortcut-tooltip">
         <strong>Keyboard Shortcuts:</strong>
         <ul>
-          <li><kbd>Alt</kbd> or <kbd>Ctrl</kbd> + Drag: Pan image while in edit mode</li>
+          <li><kbd>P</kbd>: Pan tool</li>
+          <li><kbd>S</kbd>: Select tool</li>
+          <li><kbd>R</kbd>: Rectangle tool</li>
+          <li><kbd>E</kbd>: Ellipse tool</li>
+          <li><kbd>G</kbd>: Polygon tool</li>
+          <li><kbd>T</kbd>: Text tool</li>
           <li><kbd>Esc</kbd>: Cancel current drawing</li>
           <li><kbd>Delete</kbd>: Remove selected annotation</li>
           <li>Double-click: Complete polygon</li>
@@ -894,9 +970,9 @@ class ImageAnnotator extends HTMLElement {
   }
 }
 
+
 // Define the custom element
 customElements.define('image-annotator', ImageAnnotator);
-
 export {
   ImageAnnotator
 }
