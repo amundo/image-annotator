@@ -1,0 +1,202 @@
+@import url('../svg-image-viewer/svg-image-viewer.css');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+body {
+  padding: 1em;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+h1 {
+  margin-bottom: 1rem;
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+body {
+  padding: 1em;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+h1 {
+  margin-bottom: 1rem;
+}
+
+image-annotator {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+
+  .image-annotator {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem;
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    flex-wrap: wrap;
+    
+    .tool-group, .style-group, .action-group, .mode-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    
+    .tool-group, .mode-group {
+      border-right: 1px solid #ddd;
+      padding-right: 1rem;
+    }
+    
+    .mode-hint {
+      font-size: 0.75rem;
+      color: #666;
+      font-style: italic;
+    }
+    
+    button {
+      padding: 0.25rem 0.5rem;
+      border: 1px solid #ccc;
+      background-color: #fff;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      
+      &:hover {
+        background-color: #f0f0f0;
+      }
+      
+      &.active {
+        background-color: #e0e0e0;
+        border-color: #999;
+      }
+    }
+    
+    label {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.875rem;
+    }
+    
+    input[type="color"] {
+      width: 1.5rem;
+      height: 1.5rem;
+      padding: 0;
+      border: 1px solid #ccc;
+    }
+    
+    input[type="range"] {
+      width: 60px;
+    }
+  }
+
+  .editor-container {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    
+    svg-image-viewer {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  }
+
+
+.keyboard-shortcuts {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 100;
+}
+
+.shortcut-tooltip {
+  background-color: rgba(250, 250, 250, 0.9);
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 0.8rem;
+  max-width: 250px;
+  
+  ul {
+    margin: 5px 0 0 0;
+    padding-left: 20px;
+  }
+  
+  kbd {
+    background-color: #f5f5f5;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+    color: #333;
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    white-space: nowrap;
+  }
+}
+
+/* SVG annotation styles */
+.annotation-layer {
+  pointer-events: all;
+}
+
+.annotation {
+  cursor: pointer;
+  
+  &.selected {
+    stroke-dasharray: 5,5;
+  }
+}
+
+/* Make sure this class is defined for when polygons are being drawn */
+.polygon-preview {
+  stroke-dasharray: 5,5;
+  stroke-opacity: 0.7;
+  fill-opacity: 0.3;
+}
+
+/* Mode-specific styles */
+svg.editing-mode {
+  cursor: crosshair;
+}
+
+.editing-mode .annotation {
+  cursor: pointer;
+}
+}
