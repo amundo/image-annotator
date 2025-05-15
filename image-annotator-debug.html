@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Annotator Debug Test</title>
+    <link rel="stylesheet" href="image-annotator.css">
+    <style>
+      body {
+        padding: 20px;
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      
+      h1 {
+        margin-bottom: 20px;
+      }
+      
+      .debug-panel {
+        background-color: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+      }
+      
+      .button-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      
+      button {
+        padding: 8px 12px;
+        background-color: #4a90e2;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      
+      button:hover {
+        background-color: #3a80d2;
+      }
+      
+      .annotator-container {
+        border: 1px solid #ddd;
+        height: 500px;
+      }
+      
+      .console-log {
+        background-color: #333;
+        color: #f5f5f5;
+        font-family: monospace;
+        padding: 10px;
+        margin-top: 20px;
+        border-radius: 4px;
+        height: 200px;
+        overflow-y: auto;
+      }
+      
+      .log-entry {
+        margin-bottom: 5px;
+        border-bottom: 1px solid #444;
+        padding-bottom: 5px;
+      }
+      
+      .log-source {
+        color: #4a90e2;
+        font-weight: bold;
+      }
+      
+      .log-time {
+        color: #999;
+      }
+      
+      .log-data {
+        color: #f5a742;
+      }
+    </style>
+    <script type="module" src="ImageAnnotator.js"></script>
+  </head>
+  <body>
+    <h1>Image Annotator Debug Test</h1>
+    
+    <div class="debug-panel">
+      <h2>Control Panel</h2>
+      <div class="button-row">
+        <button id="pan-button">Pan Tool</button>
+        <button id="select-button">Select Tool</button>
+        <button id="rectangle-button">Rectangle Tool</button>
+        <button id="ellipse-button">Ellipse Tool</button>
+      </div>
+      <div class="button-row">
+        <button id="force-enable">Force Enable Panning</button>
+        <button id="force-disable">Force Disable Panning</button>
+        <button id="force-stop">Force Stop Dragging</button>
+        <button id="clear-log">Clear Log</button>
+      </div>
+      <div id="status-display">Status: Initializing...</div>
+    </div>
+    
+    <div class="annotator-container">
+      <image-annotator id="annotator" src="sample.jpg"></image-annotator>
+    </div>
+    
+    <div class="console-log" id="console-log">
+      <div class="log-entry">Console logs will appear here...</div>
+    </div>
+    
+    <script type="module">
+      // Override console.log to capture and display in our UI
+      const originalConsoleLog = console.log;
+      const originalConsoleError = console.error;
+      const logContainer = document.getElementById('console-log');
+      const statusDisplay = document.getElementById('status-display');
+      
+      console.log = function(...args) {
+        // Call the original log
+        originalConsoleLog.apply(console, args);
+        
+        // Create a log entry
+        const entry = document.createElement('div');
+        entry.classList.add('log-entry');
+        
+        const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+        let source = '';
+        let message = '';
+        let data = null;
+        
+        // Parse the log message
+        if (typeof args[0] === 'string' && args[0].startsWith('[')) {
+          source = args[0];
+          if (args.length > 1) {
+            if (typeof args[1] === 'string') {
+              message = args[1];
+              if (args.length > 2) {
+                data = args[2];
+              }
+            } else {
+              data = args[1];
+            }
+          }
+        } else {
+          message = args[0];
+          if (args.length > 1) {
+            data = args[1];
+          }
+        }
+        
+        // Format the log entry
+        let logText = `<span class="log-time">[${timestamp}]</span> `;
+        if (source) {
+          logText += `<span class="log-source">${source}</span> `;
+        }
+        if (message) {
+          logText += message + ' ';
+        }
+        if (data) {
+          logText += `<span class="log-data">${JSON.stringify(data)}</span>`;
+        }
+        
+        entry.innerHTML = logText;
+        logContainer.appendChild(entry);
+        logContainer.scrollTop = logContainer.scrollHeight;
+        
+        // Update status display if relevant
+        if (source && source.includes('ImageAnnotator')) {
+          if (message && message.includes('Setting tool mode')) {
+            statusDisplay.textContent = `Status: Tool changed to ${data?.newMode || 'unknown'}`;
+          } else if (message && message.includes('SVG viewer panning')) {
+            statusDisplay.textContent = `Status: ${message}`;
+          }
+        }
+      };
+      
+      console.error = function(...args) {
+        // Call the original error
+        originalConsoleError.apply(console, args);
+        
+        // Create a log entry with error styling
+        const entry = document.createElement('div');
+        entry.classList.add('log-entry');
+        entry.style.color = '#ff6b6b';
+        
+        const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+        let message = '';
+        if (args.length > 0) {
+          message = args[0];
+        }
+        
+        entry.innerHTML = `<span class="log-time">[${timestamp}]</span> <span style="color: #ff6b6b; font-weight: bold;">ERROR:</span> ${message}`;
+        logContainer.appendChild(entry);
+        logContainer.scrollTop = logContainer.scrollHeight;
+      };
+      
+      // Get references to UI elements and the annotator
+      const annotator = document.getElementById('annotator');
+      const panButton = document.getElementById('pan-button');
+      const selectButton = document.getElementById('select-button');
+      const rectangleButton = document.getElementById('rectangle-button');
+      const ellipseButton = document.getElementById('ellipse-button');
+      const forceEnableButton = document.getElementById('force-enable');
+      const forceDisableButton = document.getElementById('force-disable');
+      const forceStopButton = document.getElementById('force-stop');
+      const clearLogButton = document.getElementById('clear-log');
+      
+      // Wait for the custom elements to be defined
+      window.addEventListener('load', () => {
+        console.log('Page loaded, waiting for components to initialize...');
+        
+        // Set up button click handlers
+        panButton.addEventListener('click', () => {
+          annotator.setToolMode('pan');
+        });
+        
+        selectButton.addEventListener('click', () => {
+          annotator.setToolMode('select');
+        });
+        
+        rectangleButton.addEventListener('click', () => {
+          annotator.setToolMode('rectangle');
+        });
+        
+        ellipseButton.addEventListener('click', () => {
+          annotator.setToolMode('ellipse');
+        });
+        
+        forceEnableButton.addEventListener('click', () => {
+          // Force enable panning directly on the SVG viewer
+          const svgViewer = annotator.querySelector('svg-image-viewer');
+          if (svgViewer && svgViewer.setPanningEnabled) {
+            svgViewer.setPanningEnabled(true);
+            console.log('Manually forced panning to be enabled');
+          } else {
+            console.error('Could not find SVG viewer or setPanningEnabled method');
+          }
+        });
+        
+        forceDisableButton.addEventListener('click', () => {
+          // Force disable panning directly on the SVG viewer
+          const svgViewer = annotator.querySelector('svg-image-viewer');
+          if (svgViewer && svgViewer.setPanningEnabled) {
+            svgViewer.setPanningEnabled(false);
+            console.log('Manually forced panning to be disabled');
+          } else {
+            console.error('Could not find SVG viewer or setPanningEnabled method');
+          }
+        });
+        
+        forceStopButton.addEventListener('click', () => {
+          // Force stop dragging directly on the SVG viewer
+          const svgViewer = annotator.querySelector('svg-image-viewer');
+          if (svgViewer && svgViewer.stopDragging) {
+            svgViewer.stopDragging();
+            console.log('Manually forced dragging to stop');
+          } else {
+            console.error('Could not find SVG viewer or stopDragging method');
+          }
+        });
+        
+        clearLogButton.addEventListener('click', () => {
+          // Clear the log container
+          logContainer.innerHTML = '';
+          console.log('Log cleared');
+        });
+        
+        // Add global mouseup event for debugging
+        window.addEventListener('mouseup', (e) => {
+          const svgViewer = annotator.querySelector('svg-image-viewer');
+          if (svgViewer && svgViewer.isDragging) {
+            console.log('[GlobalMouseUp]', 'SVG viewer is still dragging on global mouseup!', {
+              isDragging: svgViewer.isDragging,
+              mouseX: e.clientX,
+              mouseY: e.clientY
+            });
+          }
+        });
+        
+        statusDisplay.textContent = 'Status: Components initialized';
+      });
+    </script>
+  </body>
+</html>

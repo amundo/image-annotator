@@ -1,4 +1,5 @@
-/* SvgImageViewer.js - v2 */
+/* SvgImageViewer.js - v3 (With Debug) */
+
 class SVGImageViewer extends HTMLElement {
   scale = 1
   translate = { x: 0, y: 0 }
@@ -11,6 +12,7 @@ class SVGImageViewer extends HTMLElement {
   moveThreshold = 5  // Increased for better detection
   clickTimeThreshold = 300  // Increased for better detection
   _panningEnabled = true  // New flag to control panning behavior
+  debug = true // Enable debugging
 
   static observedAttributes = ['src']
 
@@ -18,7 +20,14 @@ class SVGImageViewer extends HTMLElement {
     super()
   }
 
+  log(...args) {
+    if (this.debug) {
+      console.log('%c[SVGImageViewer]', 'color: blue; font-weight: bold', ...args);
+    }
+  }
+
   connectedCallback() {
+    this.log('Component connected');
     // Disable any drag capabilities at the component level
     this.style.webkitUserDrag = 'none'
     this.style.userDrag = 'none'
@@ -35,7 +44,12 @@ class SVGImageViewer extends HTMLElement {
 
   render() {
     this.innerHTML = `
-      <header class="controls"></header>
+      <header class="controls">
+        <div class="debug-panel" style="font-size: 12px; background: #eee; padding: 5px;">
+          <strong>SVG Viewer Debug:</strong>
+          <div class="debug-content">State: Ready</div>
+        </div>
+      </header>
       <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" draggable="false">
         <g class="transform-group">
           <image href="" width="100%" height="100%" draggable="false" style="pointer-events: none;"></image>
@@ -45,6 +59,7 @@ class SVGImageViewer extends HTMLElement {
     this.svg = this.querySelector('svg')
     this.transformGroup = this.querySelector('.transform-group')
     this.image = this.querySelector('image')
+    this.debugContent = this.querySelector('.debug-content')
     
     // Also set the draggable attribute programmatically for extra safety
     this.svg.setAttribute('draggable', 'false')
@@ -52,6 +67,7 @@ class SVGImageViewer extends HTMLElement {
   }
 
   attachEvents() {
+    this.log('Attaching events');
     this.svg.addEventListener('wheel', this.onWheel, { passive: false })
     this.svg.addEventListener('mousedown', this.onPointerDown)
     window.addEventListener('mousemove', this.onPointerMove)
@@ -69,14 +85,27 @@ class SVGImageViewer extends HTMLElement {
     this.image.addEventListener('load', this.onImageLoad)
   }
 
+  updateDebugInfo() {
+    if (!this.debugContent) return;
+    
+    this.debugContent.innerHTML = `
+      State: ${this.isDragging ? 'Dragging' : 'Not Dragging'} | 
+      Panning: ${this._panningEnabled ? 'Enabled' : 'Disabled'} | 
+      Scale: ${this.scale.toFixed(2)} | 
+      Translate: (${Math.round(this.translate.x)}, ${Math.round(this.translate.y)})
+    `;
+  }
+
   // Add this method to prevent the default drag behavior
   preventDragGhost = (e) => {
+    this.log('Preventing ghost drag');
     e.preventDefault()
     e.stopPropagation()
     return false
   }
 
   onImageLoad = () => {
+    this.log('Image loaded');
     // Get natural dimensions of the image
     const img = new Image()
     img.src = this.getAttribute('src')
@@ -94,6 +123,7 @@ class SVGImageViewer extends HTMLElement {
   }
 
   fitImageToView = () => {
+    this.log('Fitting image to view');
     if (!this.imageWidth || !this.imageHeight) return
     
     const svgRect = this.svg.getBoundingClientRect()
@@ -121,8 +151,12 @@ class SVGImageViewer extends HTMLElement {
 
   onWheel = (e) => {
     // Check if panning is enabled
-    if (!this._panningEnabled) return
+    if (!this._panningEnabled) {
+      this.log('Wheel ignored - panning disabled');
+      return;
+    }
     
+    this.log('Wheel event', { deltaY: e.deltaY });
     e.preventDefault()
 
     const rect = this.svg.getBoundingClientRect()
@@ -146,8 +180,12 @@ class SVGImageViewer extends HTMLElement {
 
   onPointerDown = (e) => {
     // Check if panning is enabled
-    if (!this._panningEnabled) return
+    if (!this._panningEnabled) {
+      this.log('Pointer down ignored - panning disabled');
+      return;
+    }
     
+    this.log('Pointer down', { x: e.clientX, y: e.clientY });
     // Prevent browser's default drag behavior
     e.preventDefault()
     
@@ -170,6 +208,8 @@ class SVGImageViewer extends HTMLElement {
     this.dragTimeout = setTimeout(() => {
       this.isDragging = true
       this.svg.classList.add('dragging')
+      this.log('Drag started (timeout)');
+      this.updateDebugInfo()
     }, 150) // Short delay before initiating drag
     
     this.lastPointer = { x: e.clientX, y: e.clientY }
@@ -177,10 +217,12 @@ class SVGImageViewer extends HTMLElement {
 
   onPointerMove = (e) => {
     // Check if panning is enabled
-    if (!this._panningEnabled) return
+    if (!this._panningEnabled) {
+      return;
+    }
     
     // If we haven't started dragging yet but the mouse moved significantly
-    if (!this.isDragging && this.dragTimeout) {
+    if (!this.isDragging && this.dragTimeout && this.pointerStartCoords) {
       const dx = e.clientX - this.pointerStartCoords.screen.x
       const dy = e.clientY - this.pointerStartCoords.screen.y
       const moveDistance = Math.sqrt(dx*dx + dy*dy)
@@ -191,11 +233,14 @@ class SVGImageViewer extends HTMLElement {
         this.dragTimeout = null
         this.isDragging = true
         this.svg.classList.add('dragging')
+        this.log('Drag started (threshold)', { moveDistance });
+        this.updateDebugInfo()
       }
     }
     
     if (!this.isDragging) return
 
+    this.log('Pointer move during drag', { x: e.clientX, y: e.clientY });
     const dx = e.clientX - this.lastPointer.x
     const dy = e.clientY - this.lastPointer.y
 
@@ -208,6 +253,11 @@ class SVGImageViewer extends HTMLElement {
   }
 
   onPointerUp = (e) => {
+    this.log('Pointer up', { 
+      isDragging: this.isDragging, 
+      hasTimeout: !!this.dragTimeout
+    });
+    
     // Clear the drag timeout if it exists
     if (this.dragTimeout) {
       clearTimeout(this.dragTimeout)
@@ -217,6 +267,7 @@ class SVGImageViewer extends HTMLElement {
     const wasDragging = this.isDragging
     this.isDragging = false
     this.svg.classList.remove('dragging')
+    this.updateDebugInfo()
     
     // We'll handle click detection in the separate onClick handler
   }
@@ -224,10 +275,16 @@ class SVGImageViewer extends HTMLElement {
   // Separate click handler for better reliability
   onClick = (e) => {
     // Don't process if we were just dragging
-    if (this.isDragging) return
+    if (this.isDragging) {
+      this.log('Click ignored - was dragging');
+      return;
+    }
     
     // Calculate how far the pointer moved from its start position
-    if (!this.pointerStartCoords) return
+    if (!this.pointerStartCoords) {
+      this.log('Click ignored - no start coordinates');
+      return;
+    }
     
     const dx = e.clientX - this.pointerStartCoords.screen.x
     const dy = e.clientY - this.pointerStartCoords.screen.y
@@ -236,6 +293,12 @@ class SVGImageViewer extends HTMLElement {
     // Calculate how long since the pointer went down
     const clickTime = Date.now()
     const pointerDownDuration = clickTime - this.pointerDownTime
+    
+    this.log('Click detected', { 
+      moveDistance, 
+      pointerDownDuration,
+      isClickValid: moveDistance <= this.moveThreshold && pointerDownDuration <= this.clickTimeThreshold
+    });
     
     // Only process clicks that didn't move much and weren't held down long
     if (moveDistance <= this.moveThreshold && pointerDownDuration <= this.clickTimeThreshold) {
@@ -264,6 +327,9 @@ class SVGImageViewer extends HTMLElement {
     // For SVG, we'll update the transform attribute of the group element
     this.transformGroup.setAttribute('transform', 
       `translate(${this.translate.x} ${this.translate.y}) scale(${this.scale})`)
+      
+    // Update debug info
+    this.updateDebugInfo();
       
     // Dispatch event when transform changes
     this.dispatchEvent(new CustomEvent('transform-changed', {
@@ -318,6 +384,7 @@ class SVGImageViewer extends HTMLElement {
    * @param {boolean} enabled - Whether panning should be enabled
    */
   setPanningEnabled(enabled) {
+    this.log('Setting panning enabled:', enabled);
     this._panningEnabled = enabled
     
     // If disabling panning, ensure any ongoing drag operation is canceled
@@ -339,6 +406,7 @@ class SVGImageViewer extends HTMLElement {
       this.svg.classList.remove('pan-enabled')
     }
     
+    this.updateDebugInfo();
     return this  // For chaining
   }
   
@@ -354,6 +422,7 @@ class SVGImageViewer extends HTMLElement {
    * Force-stop any ongoing drag operation
    */
   stopDragging() {
+    this.log('Force-stopping dragging');
     if (this.dragTimeout) {
       clearTimeout(this.dragTimeout)
       this.dragTimeout = null
@@ -362,13 +431,13 @@ class SVGImageViewer extends HTMLElement {
       this.isDragging = false
       this.svg.classList.remove('dragging')
     }
+    this.updateDebugInfo();
     return this  // For chaining
   }
 }
 
-
-
 customElements.define('svg-image-viewer', SVGImageViewer)
+
 export {
   SVGImageViewer
 }

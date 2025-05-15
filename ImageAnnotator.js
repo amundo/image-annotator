@@ -1,6 +1,6 @@
 import { SVGImageViewer } from './svg-image-viewer/SVGImageViewer.js';
 
-/* ImageAnnotator.js - v26 */
+/* ImageAnnotator.js - v30 */
 class ImageAnnotator extends HTMLElement {
   // Annotation types
   static ANNOTATION_TYPES = {
@@ -141,6 +141,7 @@ class ImageAnnotator extends HTMLElement {
   }
 
   setupSVGViewer() {
+    console.log('[ImageAnnotator] Setting up SVG viewer');
     // Set image source if provided
     const src = this.getAttribute('src');
     if (src) {
@@ -151,6 +152,11 @@ class ImageAnnotator extends HTMLElement {
     setTimeout(() => {
       // Create a new annotation layer group in the SVG
       this.svg = this.svgViewer.querySelector('svg');
+      if (!this.svg) {
+        console.error('[ImageAnnotator] SVG element not found within the SVG viewer');
+        return;
+      }
+      
       const svgNamespace = 'http://www.w3.org/2000/svg';
       
       // Create a group for annotations that will sit on top of the image
@@ -159,16 +165,32 @@ class ImageAnnotator extends HTMLElement {
       
       // Find the transform group to insert our annotation layer after it
       const transformGroup = this.svgViewer.querySelector('.transform-group');
+      if (!transformGroup) {
+        console.error('[ImageAnnotator] Transform group not found within the SVG viewer');
+        return;
+      }
+      
       this.svg.insertBefore(this.annotationLayer, transformGroup.nextSibling);
       
       // Store reference to the transform group to sync transformations
       this.transformGroup = transformGroup;
       
       // Listen for transform changes in the SVG viewer
+      console.log('[ImageAnnotator] Adding transform-changed listener');
       this.svgViewer.addEventListener('transform-changed', this.onTransformChanged);
       
       // Setup additional event listeners specific to annotation
       this.setupAnnotationEvents();
+      
+      // Set initial tool mode to pan
+      this.setToolMode(ImageAnnotator.TOOL_MODES.PAN);
+      
+      console.log('[ImageAnnotator] SVG viewer setup complete', {
+        svgFound: !!this.svg,
+        transformGroupFound: !!this.transformGroup,
+        annotationLayerCreated: !!this.annotationLayer,
+        viewerPanningEnabled: this.svgViewer.isPanningEnabled ? this.svgViewer.isPanningEnabled() : 'unknown'
+      });
     }, 100);
   }
   
@@ -290,6 +312,12 @@ class ImageAnnotator extends HTMLElement {
   }
   
   setToolMode(mode) {
+    console.log('[ImageAnnotator] Setting tool mode', {
+      previousMode: this.currentMode,
+      newMode: mode,
+      svgViewerExists: !!this.svgViewer
+    });
+    
     // First update the mode
     this.currentMode = mode;
     
@@ -300,6 +328,11 @@ class ImageAnnotator extends HTMLElement {
     
     // Update cursor styles based on mode
     this.svg.classList.remove('pan-mode', 'select-mode', 'drawing-mode');
+    
+    if (!this.svgViewer) {
+      console.error('[ImageAnnotator] SVG viewer not found');
+      return;
+    }
     
     // Configure SVG viewer based on mode
     if (mode === ImageAnnotator.TOOL_MODES.PAN) {
@@ -345,9 +378,16 @@ class ImageAnnotator extends HTMLElement {
     }
     
     // Make sure dragging is reset if tool changes
-    this.svgViewer.isDragging = false;
-    this.svgFigure?.classList.remove('dragging');
-    this.svg?.classList.remove('dragging');
+    if (this.svgViewer.stopDragging) {
+      this.svgViewer.stopDragging();
+    } else {
+      console.error('[ImageAnnotator] SVG viewer missing stopDragging method');
+    }
+    
+    // Log panning state after change
+    if (this.svgViewer.isPanningEnabled) {
+      console.log('[ImageAnnotator] SVG viewer panning state:', this.svgViewer.isPanningEnabled());
+    }
     
     // Dispatch event for tool change
     this.dispatchEvent(new CustomEvent('tool-changed', { 
@@ -356,13 +396,35 @@ class ImageAnnotator extends HTMLElement {
   }
   
   enableSvgViewerPanning() {
-    // Use the SVG viewer's built-in panning control
-    this.svgViewer.setPanningEnabled(true);
+    console.log('[ImageAnnotator] Enabling SVG viewer panning');
+    // Make sure the SVG viewer exists
+    if (!this.svgViewer) {
+      console.error('[ImageAnnotator] Cannot enable panning - SVG viewer not found');
+      return;
+    }
+    
+    // Use the SVG viewer's built-in panning control if available
+    if (this.svgViewer.setPanningEnabled) {
+      this.svgViewer.setPanningEnabled(true);
+    } else {
+      console.error('[ImageAnnotator] SVG viewer missing setPanningEnabled method');
+    }
   }
   
   disableSvgViewerPanning() {
-    // Use the SVG viewer's built-in panning control
-    this.svgViewer.setPanningEnabled(false);
+    console.log('[ImageAnnotator] Disabling SVG viewer panning');
+    // Make sure the SVG viewer exists
+    if (!this.svgViewer) {
+      console.error('[ImageAnnotator] Cannot disable panning - SVG viewer not found');
+      return;
+    }
+    
+    // Use the SVG viewer's built-in panning control if available
+    if (this.svgViewer.setPanningEnabled) {
+      this.svgViewer.setPanningEnabled(false);
+    } else {
+      console.error('[ImageAnnotator] SVG viewer missing setPanningEnabled method');
+    }
   }
 
   deleteAnnotation(element) {
@@ -435,6 +497,14 @@ class ImageAnnotator extends HTMLElement {
   onMouseDown(e) {
     // Only handle left mouse button
     if (e.button !== 0) return;
+    
+    console.log('[ImageAnnotator] onMouseDown', {
+      mode: this.currentMode,
+      target: e.target.tagName,
+      targetClass: e.target.className ? e.target.className.baseVal : null,
+      svgViewerPanningEnabled: this.svgViewer.isPanningEnabled ? this.svgViewer.isPanningEnabled() : 'unknown',
+      svgViewerIsDragging: this.svgViewer.isDragging ? this.svgViewer.isDragging : 'unknown',
+    });
     
     // Convert coordinates
     const point = this.clientToSvgPoint(e.clientX, e.clientY);
@@ -913,7 +983,6 @@ class ImageAnnotator extends HTMLElement {
 
 // Define the custom element
 customElements.define('image-annotator', ImageAnnotator);
-
 export {
   ImageAnnotator
 }
