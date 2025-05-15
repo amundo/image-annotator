@@ -1,18 +1,15 @@
-/* SvgImageViewer.js - v3 (With Debug) */
-
-class SVGImageViewer extends HTMLElement {
+/**
+ * SvgImageViewer Component
+ * 
+ * A web component that displays an image within an SVG container,
+ * providing zoom and pan functionality without directly handling events.
+ * All event handling is delegated to the parent component.
+ */
+export class SvgImageViewer extends HTMLElement {
   scale = 1
   translate = { x: 0, y: 0 }
-  isDragging = false
-  lastPointer = { x: 0, y: 0 }
   imageWidth = 0
   imageHeight = 0
-  pointerDownTime = 0
-  dragTimeout = null
-  moveThreshold = 5  // Increased for better detection
-  clickTimeThreshold = 300  // Increased for better detection
-  _panningEnabled = true  // New flag to control panning behavior
-  debug = true // Enable debugging
 
   static observedAttributes = ['src']
 
@@ -20,21 +17,8 @@ class SVGImageViewer extends HTMLElement {
     super()
   }
 
-  log(...args) {
-    if (this.debug) {
-      console.log('%c[SVGImageViewer]', 'color: blue; font-weight: bold', ...args);
-    }
-  }
-
   connectedCallback() {
-    this.log('Component connected');
-    // Disable any drag capabilities at the component level
-    this.style.webkitUserDrag = 'none'
-    this.style.userDrag = 'none'
-    this.style.webkitTouchCallout = 'none'
-    
     this.render()
-    this.attachEvents()
     this.updateSrc()
   }
 
@@ -44,68 +28,22 @@ class SVGImageViewer extends HTMLElement {
 
   render() {
     this.innerHTML = `
-      <header class="controls">
-        <div class="debug-panel" style="font-size: 12px; background: #eee; padding: 5px;">
-          <strong>SVG Viewer Debug:</strong>
-          <div class="debug-content">State: Ready</div>
-        </div>
-      </header>
-      <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" draggable="false">
+      <header class="controls"></header>
+      <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
         <g class="transform-group">
-          <image href="" width="100%" height="100%" draggable="false" style="pointer-events: none;"></image>
+          <image href="" width="100%" height="100%"></image>
         </g>
       </svg>
     `
     this.svg = this.querySelector('svg')
     this.transformGroup = this.querySelector('.transform-group')
     this.image = this.querySelector('image')
-    this.debugContent = this.querySelector('.debug-content')
-    
-    // Also set the draggable attribute programmatically for extra safety
-    this.svg.setAttribute('draggable', 'false')
-    this.image.setAttribute('draggable', 'false')
-  }
-
-  attachEvents() {
-    this.log('Attaching events');
-    this.svg.addEventListener('wheel', this.onWheel, { passive: false })
-    this.svg.addEventListener('mousedown', this.onPointerDown)
-    window.addEventListener('mousemove', this.onPointerMove)
-    window.addEventListener('mouseup', this.onPointerUp)
-    
-    // Add these handlers to prevent the ghost drag effect
-    this.svg.addEventListener('dragstart', this.preventDragGhost)
-    this.svg.addEventListener('drop', this.preventDragGhost)
-    this.svg.addEventListener('dragover', this.preventDragGhost)
-    
-    // Add click event to ensure we don't miss click events
-    this.svg.addEventListener('click', this.onClick)
     
     // Add listener to handle image loading
     this.image.addEventListener('load', this.onImageLoad)
   }
 
-  updateDebugInfo() {
-    if (!this.debugContent) return;
-    
-    this.debugContent.innerHTML = `
-      State: ${this.isDragging ? 'Dragging' : 'Not Dragging'} | 
-      Panning: ${this._panningEnabled ? 'Enabled' : 'Disabled'} | 
-      Scale: ${this.scale.toFixed(2)} | 
-      Translate: (${Math.round(this.translate.x)}, ${Math.round(this.translate.y)})
-    `;
-  }
-
-  // Add this method to prevent the default drag behavior
-  preventDragGhost = (e) => {
-    this.log('Preventing ghost drag');
-    e.preventDefault()
-    e.stopPropagation()
-    return false
-  }
-
   onImageLoad = () => {
-    this.log('Image loaded');
     // Get natural dimensions of the image
     const img = new Image()
     img.src = this.getAttribute('src')
@@ -119,11 +57,100 @@ class SVGImageViewer extends HTMLElement {
       
       // Reset transform to initial state
       this.fitImageToView()
+      
+      // Dispatch a loaded event that parent components can listen for
+      this.dispatchEvent(new CustomEvent('image-loaded', {
+        bubbles: true,
+        detail: { width: this.imageWidth, height: this.imageHeight }
+      }))
+    }
+  }
+
+  // Public API methods
+  
+  // Convert screen coordinates to image coordinates
+  screenToImageCoordinates(screenX, screenY) {
+    const svgRect = this.svg.getBoundingClientRect()
+    const x = (screenX - svgRect.left - this.translate.x) / this.scale
+    const y = (screenY - svgRect.top - this.translate.y) / this.scale
+    return { x, y }
+  }
+  
+  // Convert image coordinates to screen coordinates
+  imageToScreenCoordinates(imageX, imageY) {
+    const svgRect = this.svg.getBoundingClientRect()
+    const x = imageX * this.scale + this.translate.x + svgRect.left
+    const y = imageY * this.scale + this.translate.y + svgRect.top
+    return { x, y }
+  }
+  
+  // Handle zoom at a specific point
+  zoomAt(screenX, screenY, zoomFactor) {
+    const rect = this.svg.getBoundingClientRect()
+    const mouseX = screenX - rect.left
+    const mouseY = screenY - rect.top
+
+    const newScale = this.scale * zoomFactor
+
+    // Calculate mouse position relative to the image
+    const imgX = (mouseX - this.translate.x) / this.scale
+    const imgY = (mouseY - this.translate.y) / this.scale
+
+    // Adjust translation to zoom toward mouse position
+    this.translate.x = mouseX - imgX * newScale
+    this.translate.y = mouseY - imgY * newScale
+    this.scale = newScale
+
+    this.updateTransform()
+    
+    // Dispatch zoom event that parent can listen for
+    this.dispatchEvent(new CustomEvent('zoom-changed', {
+      bubbles: true,
+      detail: { scale: this.scale }
+    }))
+  }
+  
+  // Set zoom to specific level
+  setZoom(newScale) {
+    // Get center of view
+    const rect = this.svg.getBoundingClientRect()
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+    
+    // Zoom at center point
+    this.zoomAt(centerX + rect.left, centerY + rect.top, newScale / this.scale)
+  }
+  
+  // Pan the image by a delta
+  panBy(dx, dy) {
+    this.translate.x += dx
+    this.translate.y += dy
+    this.updateTransform()
+    
+    // Dispatch pan event that parent can listen for
+    this.dispatchEvent(new CustomEvent('pan-changed', {
+      bubbles: true,
+      detail: { translate: { ...this.translate } }
+    }))
+  }
+  
+  // Set translation to specific values
+  setTranslation(x, y) {
+    this.translate.x = x
+    this.translate.y = y
+    this.updateTransform()
+  }
+  
+  // Set dragging state
+  setDragging(isDragging) {
+    if (isDragging) {
+      this.svg.classList.add('dragging')
+    } else {
+      this.svg.classList.remove('dragging')
     }
   }
 
   fitImageToView = () => {
-    this.log('Fitting image to view');
     if (!this.imageWidth || !this.imageHeight) return
     
     const svgRect = this.svg.getBoundingClientRect()
@@ -140,6 +167,24 @@ class SVGImageViewer extends HTMLElement {
     this.translate.y = (svgHeight - (this.imageHeight * this.scale)) / 2
     
     this.updateTransform()
+    
+    // Dispatch events
+    this.dispatchEvent(new CustomEvent('zoom-changed', {
+      bubbles: true,
+      detail: { scale: this.scale }
+    }))
+    
+    this.dispatchEvent(new CustomEvent('pan-changed', {
+      bubbles: true,
+      detail: { translate: { ...this.translate } }
+    }))
+    
+    return { scale: this.scale, translate: { ...this.translate } }
+  }
+  
+  // Reset to original view
+  resetView() {
+    return this.fitImageToView()
   }
 
   updateSrc = () => {
@@ -149,295 +194,32 @@ class SVGImageViewer extends HTMLElement {
     }
   }
 
-  onWheel = (e) => {
-    // Check if panning is enabled
-    if (!this._panningEnabled) {
-      this.log('Wheel ignored - panning disabled');
-      return;
-    }
-    
-    this.log('Wheel event', { deltaY: e.deltaY });
-    e.preventDefault()
-
-    const rect = this.svg.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
-
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9
-    const newScale = this.scale * zoomFactor
-
-    // Calculate mouse position relative to the image
-    const imgX = (mouseX - this.translate.x) / this.scale
-    const imgY = (mouseY - this.translate.y) / this.scale
-
-    // Adjust translation to zoom toward mouse position
-    this.translate.x = mouseX - imgX * newScale
-    this.translate.y = mouseY - imgY * newScale
-    this.scale = newScale
-
-    this.updateTransform()
-  }
-
-  onPointerDown = (e) => {
-    // Check if panning is enabled
-    if (!this._panningEnabled) {
-      this.log('Pointer down ignored - panning disabled');
-      return;
-    }
-    
-    this.log('Pointer down', { x: e.clientX, y: e.clientY });
-    // Prevent browser's default drag behavior
-    e.preventDefault()
-    
-    // Get the coordinates at the start point
-    const svgRect = this.svg.getBoundingClientRect()
-    const svgX = e.clientX - svgRect.left
-    const svgY = e.clientY - svgRect.top
-    
-    // Store the start coordinates for later
-    this.pointerStartCoords = {
-      screen: { x: e.clientX, y: e.clientY },
-      svg: { x: svgX, y: svgY },
-      image: this.getImageCoordinates(e.clientX, e.clientY)
-    }
-    
-    // Track the initial time for distinguishing between click and drag
-    this.pointerDownTime = Date.now()
-    
-    // Set up dragging with a short delay to distinguish from clicks
-    this.dragTimeout = setTimeout(() => {
-      this.isDragging = true
-      this.svg.classList.add('dragging')
-      this.log('Drag started (timeout)');
-      this.updateDebugInfo()
-    }, 150) // Short delay before initiating drag
-    
-    this.lastPointer = { x: e.clientX, y: e.clientY }
-  }
-
-  onPointerMove = (e) => {
-    // Check if panning is enabled
-    if (!this._panningEnabled) {
-      return;
-    }
-    
-    // If we haven't started dragging yet but the mouse moved significantly
-    if (!this.isDragging && this.dragTimeout && this.pointerStartCoords) {
-      const dx = e.clientX - this.pointerStartCoords.screen.x
-      const dy = e.clientY - this.pointerStartCoords.screen.y
-      const moveDistance = Math.sqrt(dx*dx + dy*dy)
-      
-      // If moved more than threshold, start dragging immediately
-      if (moveDistance > this.moveThreshold) {
-        clearTimeout(this.dragTimeout)
-        this.dragTimeout = null
-        this.isDragging = true
-        this.svg.classList.add('dragging')
-        this.log('Drag started (threshold)', { moveDistance });
-        this.updateDebugInfo()
-      }
-    }
-    
-    if (!this.isDragging) return
-
-    this.log('Pointer move during drag', { x: e.clientX, y: e.clientY });
-    const dx = e.clientX - this.lastPointer.x
-    const dy = e.clientY - this.lastPointer.y
-
-    this.translate.x += dx
-    this.translate.y += dy
-
-    this.lastPointer = { x: e.clientX, y: e.clientY }
-
-    this.updateTransform()
-  }
-
-  onPointerUp = (e) => {
-    this.log('Pointer up', { 
-      isDragging: this.isDragging, 
-      hasTimeout: !!this.dragTimeout
-    });
-    
-    // Clear the drag timeout if it exists
-    if (this.dragTimeout) {
-      clearTimeout(this.dragTimeout)
-      this.dragTimeout = null
-    }
-    
-    const wasDragging = this.isDragging
-    this.isDragging = false
-    this.svg.classList.remove('dragging')
-    this.updateDebugInfo()
-    
-    // We'll handle click detection in the separate onClick handler
-  }
-  
-  // Separate click handler for better reliability
-  onClick = (e) => {
-    // Don't process if we were just dragging
-    if (this.isDragging) {
-      this.log('Click ignored - was dragging');
-      return;
-    }
-    
-    // Calculate how far the pointer moved from its start position
-    if (!this.pointerStartCoords) {
-      this.log('Click ignored - no start coordinates');
-      return;
-    }
-    
-    const dx = e.clientX - this.pointerStartCoords.screen.x
-    const dy = e.clientY - this.pointerStartCoords.screen.y
-    const moveDistance = Math.sqrt(dx*dx + dy*dy)
-    
-    // Calculate how long since the pointer went down
-    const clickTime = Date.now()
-    const pointerDownDuration = clickTime - this.pointerDownTime
-    
-    this.log('Click detected', { 
-      moveDistance, 
-      pointerDownDuration,
-      isClickValid: moveDistance <= this.moveThreshold && pointerDownDuration <= this.clickTimeThreshold
-    });
-    
-    // Only process clicks that didn't move much and weren't held down long
-    if (moveDistance <= this.moveThreshold && pointerDownDuration <= this.clickTimeThreshold) {
-      const imageCoords = this.getImageCoordinates(e.clientX, e.clientY)
-      
-      // Round to integers if needed for pixel precision
-      const x = Math.round(imageCoords.x)
-      const y = Math.round(imageCoords.y)
-      
-      // Check if the coordinates are within the image bounds
-      const isWithinImage = this.isPointWithinImage(x, y)
-      
-      // Dispatch a custom event with the coordinates and whether it was inside the image
-      this.dispatchEvent(new CustomEvent('image-click', {
-        detail: { 
-          x, 
-          y, 
-          withinImage: isWithinImage,
-          originalEvent: e 
-        }
-      }))
-    }
-  }
-
   updateTransform = () => {
     // For SVG, we'll update the transform attribute of the group element
     this.transformGroup.setAttribute('transform', 
       `translate(${this.translate.x} ${this.translate.y}) scale(${this.scale})`)
-      
-    // Update debug info
-    this.updateDebugInfo();
-      
-    // Dispatch event when transform changes
-    this.dispatchEvent(new CustomEvent('transform-changed', {
-      detail: {
-        translate: this.translate,
-        scale: this.scale
-      }
-    }))
   }
   
-  // Check if a point is within the image bounds
-  isPointWithinImage(x, y) {
-    return x >= 0 && y >= 0 && x <= this.imageWidth && y <= this.imageHeight
+  // Getter for current scale
+  getScale() {
+    return this.scale
   }
   
-  // Add this method for coordinate conversion
-  getImageCoordinates(screenX, screenY) {
-    // Get SVG bounding rect to adjust for its position
-    const svgRect = this.svg.getBoundingClientRect()
-    
-    // Adjust screen coordinates to be relative to SVG
-    const svgX = screenX - svgRect.left
-    const svgY = screenY - svgRect.top
-    
-    // Apply inverse of current transformations
-    // First subtract translation, then divide by scale
-    const imageX = (svgX - this.translate.x) / this.scale
-    const imageY = (svgY - this.translate.y) / this.scale
-    
-    return { x: imageX, y: imageY }
+  // Getter for current translation
+  getTranslation() {
+    return { ...this.translate }
   }
   
-  // Method to convert image coordinates back to screen coordinates
-  getScreenCoordinates(imageX, imageY) {
-    const svgRect = this.svg.getBoundingClientRect()
-    
-    // Apply current transformations
-    // First multiply by scale, then add translation
-    const svgX = (imageX * this.scale) + this.translate.x
-    const svgY = (imageY * this.scale) + this.translate.y
-    
-    return { 
-      x: svgX + svgRect.left, 
-      y: svgY + svgRect.top 
-    }
+  // Getter for image dimensions
+  getImageDimensions() {
+    return { width: this.imageWidth, height: this.imageHeight }
   }
   
-  // PUBLIC API FOR CONTROLLING PANNING BEHAVIOR
-  
-  /**
-   * Enable or disable panning functionality
-   * @param {boolean} enabled - Whether panning should be enabled
-   */
-  setPanningEnabled(enabled) {
-    this.log('Setting panning enabled:', enabled);
-    this._panningEnabled = enabled
-    
-    // If disabling panning, ensure any ongoing drag operation is canceled
-    if (!enabled) {
-      if (this.dragTimeout) {
-        clearTimeout(this.dragTimeout)
-        this.dragTimeout = null
-      }
-      this.isDragging = false
-      this.svg.classList.remove('dragging')
-    }
-    
-    // Update cursor to give visual feedback based on new state
-    if (enabled) {
-      this.svg.classList.add('pan-enabled')
-      this.svg.classList.remove('pan-disabled')
-    } else {
-      this.svg.classList.add('pan-disabled')
-      this.svg.classList.remove('pan-enabled')
-    }
-    
-    this.updateDebugInfo();
-    return this  // For chaining
-  }
-  
-  /**
-   * Check if panning is currently enabled
-   * @return {boolean} Whether panning is enabled
-   */
-  isPanningEnabled() {
-    return this._panningEnabled
-  }
-  
-  /**
-   * Force-stop any ongoing drag operation
-   */
-  stopDragging() {
-    this.log('Force-stopping dragging');
-    if (this.dragTimeout) {
-      clearTimeout(this.dragTimeout)
-      this.dragTimeout = null
-    }
-    if (this.isDragging) {
-      this.isDragging = false
-      this.svg.classList.remove('dragging')
-    }
-    this.updateDebugInfo();
-    return this  // For chaining
+  // Getter for svg element dimensions
+  getViewportDimensions() {
+    const rect = this.svg.getBoundingClientRect()
+    return { width: rect.width, height: rect.height }
   }
 }
 
-customElements.define('svg-image-viewer', SVGImageViewer)
-
-export {
-  SVGImageViewer
-}
+customElements.define('svg-image-viewer', SvgImageViewer)

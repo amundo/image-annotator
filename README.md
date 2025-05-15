@@ -20,8 +20,8 @@ This package provides a vanilla JavaScript web component for image annotation, w
 
 The system consists of two main components:
 
-1. **SVGImageViewer**: Base component that handles image loading, panning, and zooming
-2. **ImageAnnotator**: Main annotation component that uses SVGImageViewer as a sub-component
+1. **SvgImageViewer**: Base component that handles image loading, panning, and zooming
+2. **ImageAnnotator**: Main annotation component that uses SvgImageViewer as a sub-component
 
 ## Installation
 
@@ -29,7 +29,7 @@ The system consists of two main components:
 
 ```html
 <link rel="stylesheet" href="image-annotator.css">
-<script type="module" src="SVGImageViewer.js"></script>
+<script type="module" src="SvgImageViewer.js"></script>
 <script type="module" src="ImageAnnotator.js"></script>
 ```
 
@@ -51,7 +51,7 @@ The system consists of two main components:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Annotation Component Demo</title>
     <link rel="stylesheet" href="image-annotator.css">
-    <script type="module" src="SVGImageViewer.js"></script>
+    <script type="module" src="SvgImageViewer.js"></script>
     <script type="module" src="ImageAnnotator.js"></script>
   </head>
   <body>
@@ -129,8 +129,8 @@ This package provides a vanilla JavaScript web component for image annotation, w
 
 The system consists of two main components:
 
-1. **SVGImageViewer**: Base component that handles image loading, panning, and zooming
-2. **ImageAnnotator**: Main annotation component that uses SVGImageViewer as a sub-component
+1. **SvgImageViewer**: Base component that handles image loading, panning, and zooming
+2. **ImageAnnotator**: Main annotation component that uses SvgImageViewer as a sub-component
 
 ## Installation
 
@@ -138,7 +138,7 @@ The system consists of two main components:
 
 ```html
 <link rel="stylesheet" href="image-annotator.css">
-<script type="module" src="SVGImageViewer.js"></script>
+<script type="module" src="SvgImageViewer.js"></script>
 <script type="module" src="ImageAnnotator.js"></script>
 ```
 
@@ -160,7 +160,7 @@ The system consists of two main components:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Annotation Component Demo</title>
     <link rel="stylesheet" href="image-annotator.css">
-    <script type="module" src="SVGImageViewer.js"></script>
+    <script type="module" src="SvgImageViewer.js"></script>
     <script type="module" src="ImageAnnotator.js"></script>
   </head>
   <body>

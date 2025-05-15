@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Annotator Demo</title>
+    <link rel="stylesheet" href="image-annotator.css">
+    <script type="module" src="ImageAnnotator.js"></script>
+    <style>
+      h1 { color: maroon;}
+      /* Additional page-specific styles */
+      .controls-panel {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #f9f9f9;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      
+      .annotation-list {
+        margin-top: 1rem;
+        height: 200px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 0.5rem;
+      }
+      
+      .annotation-list h3 {
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+      }
+      
+      .annotation-list ul {
+        padding-left: 1.5rem;
+        margin: 0;
+      }
+      
+      .annotation-list li {
+        margin-bottom: 0.25rem;
+      }
+      
+      button {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 0.5rem;
+      }
+      
+      button:hover {
+        background: #0055aa;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Image Annotator Demo</h1>
+    
+    <div style="display: grid; grid-template-columns: 1fr 300px; gap: 1rem; height: 100%;">
+      <!-- Main Annotator Component -->
+      <image-annotator src="sample.jpg" id="annotator"></image-annotator>
+      
+      <!-- Controls Panel -->
+      <div class="controls-panel">
+        <h2>Controls</h2>
+        
+        <div>
+          <button id="export-btn">Export Annotations</button>
+          <button id="clear-btn">Clear All</button>
+        </div>
+        
+        <div class="annotation-list">
+          <h3>Annotations</h3>
+          <ul id="annotation-list"></ul>
+        </div>
+      </div>
+    </div>
+    
+    <script type="module">
+      // Get references to the elements
+      const annotator = document.getElementById('annotator');
+      const exportBtn = document.getElementById('export-btn');
+      const clearBtn = document.getElementById('clear-btn');
+      const annotationList = document.getElementById('annotation-list');
+      
+      // Function to update the annotation list
+      function updateAnnotationList() {
+        const annotations = annotator.getAnnotations();
+        annotationList.innerHTML = '';
+        
+        if (annotations.length === 0) {
+          annotationList.innerHTML = '<li>No annotations yet</li>';
+          return;
+        }
+        
+        annotations.forEach(annotation => {
+          const li = document.createElement('li');
+          let details = '';
+          
+          switch (annotation.type) {
+            case 'rect':
+              details = `Rectangle at (${Math.round(annotation.x)}, ${Math.round(annotation.y)}) - ${Math.round(annotation.width)}×${Math.round(annotation.height)}`;
+              break;
+              
+            case 'ellipse':
+              details = `Ellipse at (${Math.round(annotation.cx)}, ${Math.round(annotation.cy)}) - ${Math.round(annotation.rx)}×${Math.round(annotation.ry)}`;
+              break;
+              
+            case 'polygon':
+              details = `Polygon with ${annotation.points.length} points`;
+              break;
+          }
+          
+          li.textContent = details;
+          annotationList.appendChild(li);
+        });
+      }
+      
+      // Listen for annotation events
+      annotator.addEventListener('annotation-created', (e) => {
+        console.log('New annotation created:', e.detail);
+        updateAnnotationList();
+      });
+      
+      annotator.addEventListener('annotations-cleared', () => {
+        console.log('All annotations cleared');
+        updateAnnotationList();
+      });
+      
+      // Export annotations
+      exportBtn.addEventListener('click', () => {
+        const json = annotator.exportAnnotations();
+        console.log('Exported annotations:', json);
+        
+        // Create a download link
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'annotations.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+      
+      // Clear all annotations
+      clearBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear all annotations?')) {
+          annotator.clearAnnotations();
+        }
+      });
+      
+      // Initialize the list
+      updateAnnotationList();
+    </script>
+  </body>
+</html>
