@@ -1,8 +1,0 @@
-{
-  "tasks": {
-    "build": "pandoc -f markdown -t html --section-divs --css svg-image-viewer-docs.css --template=template.html -o svg-image-viewer-docs.html svg-image-viewer-docs.md"
-  },
-  "fmt": {
-    "semiColons": false
-  }
-}
