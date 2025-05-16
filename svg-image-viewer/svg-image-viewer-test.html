@@ -116,7 +116,7 @@
     </div>
     
     <div class="viewer-container">
-      <svg-image-viewer id="viewer1" src="sample.jpg"></svg-image-viewer>
+      <svg-image-viewer controls id="viewer1" src="sample.jpg"></svg-image-viewer>
       <svg-image-viewer id="viewer2" src="sample.jpg"></svg-image-viewer>
     </div>
     
@@ -127,92 +127,6 @@
     <script type="module">
       import { SvgImageViewer } from './SvgImageViewer.js';
       
-      // Get references to UI elements
-      const viewer1 = document.getElementById('viewer1');
-      const viewer2 = document.getElementById('viewer2');
-      const enablePanButton = document.getElementById('enable-pan');
-      const disablePanButton = document.getElementById('disable-pan');
-      const forceStopButton = document.getElementById('force-stop');
-      const clearLogButton = document.getElementById('clear-log');
-      const logContainer = document.getElementById('log-container');
-      const currentState = document.getElementById('current-state');
-      
-      // Log function
-      function log(message, data = null) {
-        const entry = document.createElement('div');
-        entry.classList.add('log-entry');
-        
-        const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
-        let logText = `[${timestamp}] <span class="event-type">${message}</span>`;
-        
-        if (data) {
-          logText += ` ${JSON.stringify(data)}`;
-        }
-        
-        entry.innerHTML = logText;
-        logContainer.appendChild(entry);
-        logContainer.scrollTop = logContainer.scrollHeight;
-      }
-      
-      // Button event listeners
-      enablePanButton.addEventListener('click', () => {
-        viewer1.setPanningEnabled(true);
-        viewer2.setPanningEnabled(true);
-        enablePanButton.classList.add('active');
-        disablePanButton.classList.remove('active');
-        currentState.textContent = 'Panning enabled';
-        log('Panning enabled');
-      });
-      
-      disablePanButton.addEventListener('click', () => {
-        viewer1.setPanningEnabled(false);
-        viewer2.setPanningEnabled(false);
-        disablePanButton.classList.add('active');
-        enablePanButton.classList.remove('active');
-        currentState.textContent = 'Panning disabled';
-        log('Panning disabled');
-      });
-      
-      forceStopButton.addEventListener('click', () => {
-        viewer1.stopDragging();
-        viewer2.stopDragging();
-        log('Force stopped dragging');
-      });
-      
-      clearLogButton.addEventListener('click', () => {
-        logContainer.innerHTML = '';
-        log('Log cleared');
-      });
-      
-      // Listen to events from the viewers
-      viewer1.addEventListener('transform-changed', (e) => {
-        log('Viewer 1 transform changed', { 
-          scale: e.detail.scale.toFixed(2),
-          x: Math.round(e.detail.translate.x),
-          y: Math.round(e.detail.translate.y)
-        });
-      });
-      
-      viewer1.addEventListener('image-click', (e) => {
-        log('Viewer 1 image clicked', { 
-          x: e.detail.x,
-          y: e.detail.y,
-          withinImage: e.detail.withinImage
-        });
-      });
-      
-      // Log initial state
-      log('Test page loaded');
-      
-      // Global mouseup handler for debugging
-      window.addEventListener('mouseup', () => {
-        if (viewer1.isDragging || viewer2.isDragging) {
-          log('Global mouseup - drag state:', {
-            viewer1Dragging: viewer1.isDragging,
-            viewer2Dragging: viewer2.isDragging
-          });
-        }
-      });
     </script>
   </body>
 </html>

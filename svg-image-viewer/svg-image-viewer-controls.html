@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Image Viewer with Controls</title>
+    <link rel="stylesheet" href="svg-image-viewer.css">
+    <script type="module" src="SvgImageViewer.js"></script>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        padding: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      
+      h1 {
+        margin-bottom: 20px;
+      }
+      
+      .viewer-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        height: 500px;
+        margin-bottom: 20px;
+      }
+      
+      .description {
+        background-color: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        margin-top: 20px;
+      }
+      
+      .keyboard-shortcuts {
+        margin-top: 20px;
+      }
+      
+      .keyboard-shortcuts li {
+        margin-bottom: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SVG Image Viewer with Controls</h1>
+    
+    <div class="viewer-container">
+      <div>
+        <h2>Without Controls</h2>
+        <svg-image-viewer id="viewer1" src="mereri-alone.jpg"></svg-image-viewer>
+      </div>
+      <div>
+        <h2>With Controls</h2>
+        <svg-image-viewer id="viewer2" src="mereri.jpg" controls></svg-image-viewer>
+      </div>
+    </div>
+    
+    <div class="description">
+      <h2>About the Controls</h2>
+      <p>The SVG Image Viewer component now supports an optional <code>controls</code> attribute that adds a familiar control interface similar to HTML5 media elements.</p>
+      
+      <h3 class="keyboard-shortcuts">Keyboard Shortcuts (when component has focus):</h3>
+      <ul>
+        <li><strong>Arrow keys:</strong> Pan the image when pan mode is enabled</li>
+        <li><strong>+ / -:</strong> Zoom in and out</li>
+        <li><strong>Home / 0:</strong> Reset to fit view</li>
+        <li><strong>Space:</strong> Toggle pan mode</li>
+        <li><strong>f:</strong> Toggle fullscreen mode</li>
+      </ul>
+      
+      <h3>Sample Code:</h3>
+      <pre><code>&lt;svg-image-viewer src="sample.jpg" controls&gt;&lt;/svg-image-viewer&gt;</code></pre>
+    </div>
+    
+    <script>
+      // Get references to viewers
+      const viewer1 = document.getElementById('viewer1');
+      const viewer2 = document.getElementById('viewer2');
+      
+      // Example of using the JavaScript API
+      viewer1.addEventListener('transform-changed', (e) => {
+        console.log('Viewer 1 transform changed:', e.detail);
+      });
+      
+      viewer2.addEventListener('transform-changed', (e) => {
+        console.log('Viewer 2 transform changed:', e.detail);
+      });
+      
+      // You can also programmatically control the viewer:
+      // viewer2.setZoom(1.5);                // Set zoom level
+      // viewer2.setPanningEnabled(false);    // Disable panning
+      // viewer2.fitImageToView();            // Reset view
+    </script>
+  </body>
+</html>

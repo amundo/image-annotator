@@ -1,3 +1,6 @@
+/* Base styles */
+@import url('./svg-image-viewer-controls.css');
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -20,6 +23,7 @@ h1 {
   text-wrap: balance;
   color: forestgreen;
 }
+
 svg-image-viewer {
   border: 1px solid;
   display: flex;
