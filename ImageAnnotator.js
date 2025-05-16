@@ -1,11 +1,10 @@
 import { SvgImageViewer } from './svg-image-viewer/SvgImageViewer.js';
 
 /**
- * ImageAnnotator Component
+ * ImageAnnotator Component - Improved Version
  * 
  * A web component that combines an SvgImageViewer with annotation capabilities.
- * This component handles all user interactions and delegates zooming and panning
- * to the embedded SvgImageViewer instance.
+ * This version correctly handles letterboxing/pillarboxing for accurate annotations.
  */
 class ImageAnnotator extends HTMLElement {
   isDragging = false
@@ -141,8 +140,6 @@ class ImageAnnotator extends HTMLElement {
     this.imageViewer.addEventListener('image-loaded', this.onImageLoaded)
     
     // Listen for zoom/pan events from the image viewer to sync annotation layer
-    this.imageViewer.addEventListener('zoom-changed', this.syncAnnotationLayer)
-    this.imageViewer.addEventListener('pan-changed', this.syncAnnotationLayer)
     this.imageViewer.addEventListener('transform-changed', this.syncAnnotationLayer)
     
     // Initialize the panning mode based on current tool
@@ -151,7 +148,7 @@ class ImageAnnotator extends HTMLElement {
   
   onImageLoaded = (e) => {
     // Handle when image is loaded
-    const { width, height } = e.detail
+    console.log('Image loaded event:', e.detail);
     
     // Set the annotation SVG to match the image viewer dimensions
     this.resizeAnnotationLayer()
@@ -175,10 +172,10 @@ class ImageAnnotator extends HTMLElement {
     this.updatePointerEvents()
   }
   
-  syncAnnotationLayer = () => {
-    // Get current transform from image viewer
-    const scale = this.imageViewer.getScale()
-    const { x, y } = this.imageViewer.getTranslation()
+  syncAnnotationLayer = (e) => {
+    // Get current transform from the transform-changed event
+    const scale = e.detail.scale
+    const { x, y } = e.detail.translate
     
     // Apply the same transform to the annotations group
     this.annotationsGroup.setAttribute('transform', 
@@ -193,6 +190,9 @@ class ImageAnnotator extends HTMLElement {
         element.setAttribute('stroke-width', originalWidth / scale)
       }
     })
+    
+    // Debug the transformation
+    console.log('Syncing annotation layer with transform:', e.detail);
   }
   
   onWheel = (e) => {
@@ -280,6 +280,13 @@ class ImageAnnotator extends HTMLElement {
   startRectangleAnnotation(e) {
     // Convert screen coordinates to image coordinates
     const imageCoords = this.imageViewer.screenToImageCoordinates(e.clientX, e.clientY)
+    console.log('Starting rectangle at image coordinates:', imageCoords);
+    
+    // Only proceed if the point is within the actual image
+    if (!this.imageViewer.isPointInImage(imageCoords.x, imageCoords.y)) {
+      console.log('Point is outside image bounds, not creating annotation');
+      return;
+    }
     
     // Create a new rectangle element
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
@@ -335,6 +342,13 @@ class ImageAnnotator extends HTMLElement {
       rect.setAttribute('y', this.activeAnnotation.startY)
       rect.setAttribute('height', height)
     }
+    
+    console.log('Updating rectangle to:', {
+      x: parseFloat(rect.getAttribute('x')),
+      y: parseFloat(rect.getAttribute('y')),
+      width: parseFloat(rect.getAttribute('width')),
+      height: parseFloat(rect.getAttribute('height'))
+    });
   }
   
   finishRectangleAnnotation(e) {
@@ -361,9 +375,12 @@ class ImageAnnotator extends HTMLElement {
         bubbles: true,
         detail: this.annotations[this.annotations.length - 1]
       }))
+      
+      console.log('Created rectangle annotation:', this.annotations[this.annotations.length - 1]);
     } else {
       // Remove tiny rectangles
       rect.remove()
+      console.log('Rectangle too small, removed');
     }
     
     this.activeAnnotation = null
@@ -373,6 +390,13 @@ class ImageAnnotator extends HTMLElement {
   startEllipseAnnotation(e) {
     // Convert screen coordinates to image coordinates
     const imageCoords = this.imageViewer.screenToImageCoordinates(e.clientX, e.clientY)
+    console.log('Starting ellipse at image coordinates:', imageCoords);
+    
+    // Only proceed if the point is within the actual image
+    if (!this.imageViewer.isPointInImage(imageCoords.x, imageCoords.y)) {
+      console.log('Point is outside image bounds, not creating annotation');
+      return;
+    }
     
     // Create a new ellipse element
     const ellipse = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse')
@@ -414,6 +438,13 @@ class ImageAnnotator extends HTMLElement {
     const ellipse = this.activeAnnotation.element
     ellipse.setAttribute('rx', rx)
     ellipse.setAttribute('ry', ry)
+    
+    console.log('Updating ellipse to:', {
+      cx: parseFloat(ellipse.getAttribute('cx')),
+      cy: parseFloat(ellipse.getAttribute('cy')),
+      rx: parseFloat(ellipse.getAttribute('rx')),
+      ry: parseFloat(ellipse.getAttribute('ry'))
+    });
   }
   
   finishEllipseAnnotation(e) {
@@ -440,9 +471,12 @@ class ImageAnnotator extends HTMLElement {
         bubbles: true,
         detail: this.annotations[this.annotations.length - 1]
       }))
+      
+      console.log('Created ellipse annotation:', this.annotations[this.annotations.length - 1]);
     } else {
       // Remove tiny ellipses
       ellipse.remove()
+      console.log('Ellipse too small, removed');
     }
     
     this.activeAnnotation = null
@@ -452,6 +486,13 @@ class ImageAnnotator extends HTMLElement {
   handlePolygonPoint(e) {
     // Convert screen coordinates to image coordinates
     const imageCoords = this.imageViewer.screenToImageCoordinates(e.clientX, e.clientY)
+    console.log('Polygon point at image coordinates:', imageCoords);
+    
+    // Only proceed if the point is within the actual image (for first point)
+    if (!this.activeAnnotation && !this.imageViewer.isPointInImage(imageCoords.x, imageCoords.y)) {
+      console.log('Point is outside image bounds, not creating annotation');
+      return;
+    }
     
     // Check if we're starting a new polygon
     if (!this.activeAnnotation || this.activeAnnotation.type !== 'polygon') {
@@ -548,9 +589,12 @@ class ImageAnnotator extends HTMLElement {
         bubbles: true,
         detail: this.annotations[this.annotations.length - 1]
       }))
+      
+      console.log('Created polygon annotation:', this.annotations[this.annotations.length - 1]);
     } else {
       // Remove incomplete polygons
       this.activeAnnotation.element.remove()
+      console.log('Polygon has fewer than 3 points, removed');
     }
     
     this.activeAnnotation = null
