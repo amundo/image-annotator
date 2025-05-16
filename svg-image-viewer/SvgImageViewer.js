@@ -10,16 +10,27 @@ export class SvgImageViewer extends HTMLElement {
   translate = { x: 0, y: 0 }
   imageWidth = 0
   imageHeight = 0
+  isDragging = false
+  panningEnabled = true
+  lastPointerPosition = { x: 0, y: 0 }
 
   static observedAttributes = ['src']
 
   constructor() {
     super()
+    this._boundMouseDown = this._handleMouseDown.bind(this)
+    this._boundMouseMove = this._handleMouseMove.bind(this)
+    this._boundMouseUp = this._handleMouseUp.bind(this)
   }
 
   connectedCallback() {
     this.render()
     this.updateSrc()
+    this._attachEvents()
+  }
+  
+  disconnectedCallback() {
+    this._detachEvents()
   }
 
   attributeChangedCallback(name, oldVal, newVal) {
@@ -30,7 +41,11 @@ export class SvgImageViewer extends HTMLElement {
     this.innerHTML = `
       <header class="controls"></header>
       <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <!-- Debug rectangle to show the full SVG area -->
+        <rect x="0" y="0" width="100%" height="100%" fill="rgba(200, 200, 200, 0.1)" stroke="#ccc" stroke-width="1" />
         <g class="transform-group">
+          <!-- Debug background for the image -->
+          <rect class="image-background" x="0" y="0" width="0" height="0" fill="rgba(255, 0, 0, 0.1)" stroke="#f00" stroke-width="1" stroke-dasharray="5,5" />
           <image href="" width="100%" height="100%"></image>
         </g>
       </svg>
@@ -38,9 +53,52 @@ export class SvgImageViewer extends HTMLElement {
     this.svg = this.querySelector('svg')
     this.transformGroup = this.querySelector('.transform-group')
     this.image = this.querySelector('image')
+    this.imageBackground = this.querySelector('.image-background')
     
     // Add listener to handle image loading
     this.image.addEventListener('load', this.onImageLoad)
+  }
+
+  _attachEvents() {
+    if (this.panningEnabled) {
+      this.svg.addEventListener('mousedown', this._boundMouseDown)
+      window.addEventListener('mousemove', this._boundMouseMove)
+      window.addEventListener('mouseup', this._boundMouseUp)
+    }
+  }
+  
+  _detachEvents() {
+    this.svg.removeEventListener('mousedown', this._boundMouseDown)
+    window.removeEventListener('mousemove', this._boundMouseMove)
+    window.removeEventListener('mouseup', this._boundMouseUp)
+  }
+  
+  _handleMouseDown(e) {
+    if (!this.panningEnabled) return
+    
+    this.isDragging = true
+    this.lastPointerPosition = { x: e.clientX, y: e.clientY }
+    this.setDragging(true)
+    
+    // Prevent default to avoid text selection during drag
+    e.preventDefault()
+  }
+  
+  _handleMouseMove(e) {
+    if (!this.isDragging || !this.panningEnabled) return
+    
+    const dx = e.clientX - this.lastPointerPosition.x
+    const dy = e.clientY - this.lastPointerPosition.y
+    
+    this.panBy(dx, dy)
+    this.lastPointerPosition = { x: e.clientX, y: e.clientY }
+  }
+  
+  _handleMouseUp(e) {
+    if (!this.panningEnabled) return
+    
+    this.isDragging = false
+    this.setDragging(false)
   }
 
   onImageLoad = () => {
@@ -55,6 +113,10 @@ export class SvgImageViewer extends HTMLElement {
       this.image.setAttribute('width', this.imageWidth)
       this.image.setAttribute('height', this.imageHeight)
       
+      // Update the debug background to match image dimensions
+      this.imageBackground.setAttribute('width', this.imageWidth)
+      this.imageBackground.setAttribute('height', this.imageHeight)
+      
       // Reset transform to initial state
       this.fitImageToView()
       
@@ -67,6 +129,30 @@ export class SvgImageViewer extends HTMLElement {
   }
 
   // Public API methods
+  
+  // Enable/disable panning
+  setPanningEnabled(enabled) {
+    if (this.panningEnabled === enabled) return
+    
+    this.panningEnabled = enabled
+    
+    if (enabled) {
+      this._attachEvents()
+      this.svg.classList.remove('pan-disabled')
+    } else {
+      this._detachEvents()
+      this.stopDragging()
+      this.svg.classList.add('pan-disabled')
+    }
+  }
+  
+  // Stop any ongoing dragging
+  stopDragging() {
+    if (this.isDragging) {
+      this.isDragging = false
+      this.setDragging(false)
+    }
+  }
   
   // Convert screen coordinates to image coordinates
   screenToImageCoordinates(screenX, screenY) {
@@ -108,6 +194,15 @@ export class SvgImageViewer extends HTMLElement {
       bubbles: true,
       detail: { scale: this.scale }
     }))
+    
+    // Also dispatch a combined transform event
+    this.dispatchEvent(new CustomEvent('transform-changed', {
+      bubbles: true,
+      detail: { 
+        scale: this.scale,
+        translate: { ...this.translate }
+      }
+    }))
   }
   
   // Set zoom to specific level
@@ -131,6 +226,15 @@ export class SvgImageViewer extends HTMLElement {
     this.dispatchEvent(new CustomEvent('pan-changed', {
       bubbles: true,
       detail: { translate: { ...this.translate } }
+    }))
+    
+    // Also dispatch a combined transform event
+    this.dispatchEvent(new CustomEvent('transform-changed', {
+      bubbles: true,
+      detail: { 
+        scale: this.scale,
+        translate: { ...this.translate }
+      }
     }))
   }
   
@@ -177,6 +281,14 @@ export class SvgImageViewer extends HTMLElement {
     this.dispatchEvent(new CustomEvent('pan-changed', {
       bubbles: true,
       detail: { translate: { ...this.translate } }
+    }))
+    
+    this.dispatchEvent(new CustomEvent('transform-changed', {
+      bubbles: true,
+      detail: { 
+        scale: this.scale,
+        translate: { ...this.translate }
+      }
     }))
     
     return { scale: this.scale, translate: { ...this.translate } }

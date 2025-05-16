@@ -83,6 +83,9 @@ class ImageAnnotator extends HTMLElement {
           this.updateToolUI()
           return
         }
+        
+        // Update the pointer events based on tool
+        this.updatePointerEvents()
       })
     })
   }
@@ -102,6 +105,27 @@ class ImageAnnotator extends HTMLElement {
       'polygon': 'crosshair'
     }
     this.annotationSvg.style.cursor = cursorMap[this.currentTool] || 'default'
+    
+    // Update the pointer events based on tool
+    this.updatePointerEvents()
+  }
+  
+  updatePointerEvents() {
+    // When in pan mode, allow events to pass through to image viewer
+    // Otherwise, capture events for annotation drawing
+    if (this.currentTool === 'pan') {
+      this.annotationSvg.style.pointerEvents = 'none'
+      // Set SVG viewer panning to enabled when in pan mode
+      if (this.imageViewer && typeof this.imageViewer.setPanningEnabled === 'function') {
+        this.imageViewer.setPanningEnabled(true);
+      }
+    } else {
+      this.annotationSvg.style.pointerEvents = 'auto'
+      // Disable SVG viewer direct panning when in drawing mode
+      if (this.imageViewer && typeof this.imageViewer.setPanningEnabled === 'function') {
+        this.imageViewer.setPanningEnabled(false);
+      }
+    }
   }
   
   attachEvents() {
@@ -119,6 +143,10 @@ class ImageAnnotator extends HTMLElement {
     // Listen for zoom/pan events from the image viewer to sync annotation layer
     this.imageViewer.addEventListener('zoom-changed', this.syncAnnotationLayer)
     this.imageViewer.addEventListener('pan-changed', this.syncAnnotationLayer)
+    this.imageViewer.addEventListener('transform-changed', this.syncAnnotationLayer)
+    
+    // Initialize the panning mode based on current tool
+    this.updatePointerEvents()
   }
   
   onImageLoaded = (e) => {
@@ -128,7 +156,7 @@ class ImageAnnotator extends HTMLElement {
     // Set the annotation SVG to match the image viewer dimensions
     this.resizeAnnotationLayer()
     
-    // Maybe load annotations from an attribute or storage
+    // Load annotations from an attribute or storage if needed
     this.loadAnnotations()
   }
   
@@ -142,12 +170,9 @@ class ImageAnnotator extends HTMLElement {
     this.annotationSvg.style.position = 'absolute'
     this.annotationSvg.style.top = '0'
     this.annotationSvg.style.left = '0'
-    this.annotationSvg.style.pointerEvents = 'none' // Allow events to pass through to imageViewer
     
-    // For tools other than pan, we need to capture events
-    if (this.currentTool !== 'pan') {
-      this.annotationSvg.style.pointerEvents = 'auto'
-    }
+    // Update pointer events based on current tool
+    this.updatePointerEvents()
   }
   
   syncAnnotationLayer = () => {
@@ -158,27 +183,40 @@ class ImageAnnotator extends HTMLElement {
     // Apply the same transform to the annotations group
     this.annotationsGroup.setAttribute('transform', 
       `translate(${x} ${y}) scale(${scale})`)
+      
+    // Update stroke width for all annotations based on scale
+    // This ensures stroke widths remain visually consistent regardless of zoom level
+    const annotations = this.annotationsGroup.querySelectorAll('*')
+    annotations.forEach(element => {
+      if (element.hasAttribute('data-original-stroke-width')) {
+        const originalWidth = parseFloat(element.getAttribute('data-original-stroke-width'))
+        element.setAttribute('stroke-width', originalWidth / scale)
+      }
+    })
   }
   
   onWheel = (e) => {
     e.preventDefault()
     
-    // Only zoom if we're in pan mode
-    if (this.currentTool === 'pan') {
+    // Only zoom if we're in pan mode or holding Alt/Ctrl key for other modes
+    if (this.currentTool === 'pan' || e.altKey || e.ctrlKey) {
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9
       this.imageViewer.zoomAt(e.clientX, e.clientY, zoomFactor)
     }
   }
   
   onPointerDown = (e) => {
+    // In pan mode, let the SvgImageViewer handle it
+    if (this.currentTool === 'pan') {
+      // The event should pass through to the image viewer
+      return;
+    }
+    
     this.isDragging = true
     this.lastPointer = { x: e.clientX, y: e.clientY }
     
     // Handle based on current tool
     switch (this.currentTool) {
-      case 'pan':
-        this.imageViewer.setDragging(true)
-        break
       case 'rect':
         this.startRectangleAnnotation(e)
         break
@@ -192,6 +230,11 @@ class ImageAnnotator extends HTMLElement {
   }
   
   onPointerMove = (e) => {
+    // In pan mode, let the SvgImageViewer handle it
+    if (this.currentTool === 'pan') {
+      return;
+    }
+    
     if (!this.isDragging) return
     
     const dx = e.clientX - this.lastPointer.x
@@ -199,9 +242,6 @@ class ImageAnnotator extends HTMLElement {
     
     // Handle based on current tool
     switch (this.currentTool) {
-      case 'pan':
-        this.imageViewer.panBy(dx, dy)
-        break
       case 'rect':
         this.updateRectangleAnnotation(e)
         break
@@ -217,11 +257,13 @@ class ImageAnnotator extends HTMLElement {
   }
   
   onPointerUp = (e) => {
+    // In pan mode, let the SvgImageViewer handle it
+    if (this.currentTool === 'pan') {
+      return;
+    }
+    
     // Finish the current action based on tool
     switch (this.currentTool) {
-      case 'pan':
-        this.imageViewer.setDragging(false)
-        break
       case 'rect':
         this.finishRectangleAnnotation(e)
         break
@@ -247,7 +289,11 @@ class ImageAnnotator extends HTMLElement {
     rect.setAttribute('height', 0)
     rect.setAttribute('fill', 'rgba(255, 0, 0, 0.3)')
     rect.setAttribute('stroke', 'red')
-    rect.setAttribute('stroke-width', 2 / this.imageViewer.getScale()) // Scale-independent stroke
+    
+    // Store original stroke width for scaling during zoom
+    const originalStrokeWidth = 2
+    rect.setAttribute('data-original-stroke-width', originalStrokeWidth)
+    rect.setAttribute('stroke-width', originalStrokeWidth / this.imageViewer.getScale())
     
     // Add to the annotations group
     this.annotationsGroup.appendChild(rect)
@@ -278,6 +324,7 @@ class ImageAnnotator extends HTMLElement {
       rect.setAttribute('x', imageCoords.x)
       rect.setAttribute('width', Math.abs(width))
     } else {
+      rect.setAttribute('x', this.activeAnnotation.startX)
       rect.setAttribute('width', width)
     }
     
@@ -285,6 +332,7 @@ class ImageAnnotator extends HTMLElement {
       rect.setAttribute('y', imageCoords.y)
       rect.setAttribute('height', Math.abs(height))
     } else {
+      rect.setAttribute('y', this.activeAnnotation.startY)
       rect.setAttribute('height', height)
     }
   }
@@ -334,7 +382,11 @@ class ImageAnnotator extends HTMLElement {
     ellipse.setAttribute('ry', 0)
     ellipse.setAttribute('fill', 'rgba(0, 0, 255, 0.3)')
     ellipse.setAttribute('stroke', 'blue')
-    ellipse.setAttribute('stroke-width', 2 / this.imageViewer.getScale()) // Scale-independent stroke
+    
+    // Store original stroke width for scaling during zoom
+    const originalStrokeWidth = 2
+    ellipse.setAttribute('data-original-stroke-width', originalStrokeWidth)
+    ellipse.setAttribute('stroke-width', originalStrokeWidth / this.imageViewer.getScale())
     
     // Add to the annotations group
     this.annotationsGroup.appendChild(ellipse)
@@ -408,7 +460,11 @@ class ImageAnnotator extends HTMLElement {
       polygon.setAttribute('points', `${imageCoords.x},${imageCoords.y}`)
       polygon.setAttribute('fill', 'rgba(0, 255, 0, 0.3)')
       polygon.setAttribute('stroke', 'green')
-      polygon.setAttribute('stroke-width', 2 / this.imageViewer.getScale())
+      
+      // Store original stroke width for scaling during zoom
+      const originalStrokeWidth = 2
+      polygon.setAttribute('data-original-stroke-width', originalStrokeWidth)
+      polygon.setAttribute('stroke-width', originalStrokeWidth / this.imageViewer.getScale())
       
       // Create preview line
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
@@ -417,7 +473,10 @@ class ImageAnnotator extends HTMLElement {
       line.setAttribute('x2', imageCoords.x)
       line.setAttribute('y2', imageCoords.y)
       line.setAttribute('stroke', 'green')
-      line.setAttribute('stroke-width', 1 / this.imageViewer.getScale())
+      
+      const originalLineWidth = 1
+      line.setAttribute('data-original-stroke-width', originalLineWidth)
+      line.setAttribute('stroke-width', originalLineWidth / this.imageViewer.getScale())
       line.setAttribute('stroke-dasharray', '5,5')
       
       // Add to the annotations group
@@ -515,6 +574,7 @@ class ImageAnnotator extends HTMLElement {
           element.setAttribute('height', annotation.height)
           element.setAttribute('fill', 'rgba(255, 0, 0, 0.3)')
           element.setAttribute('stroke', 'red')
+          element.setAttribute('data-original-stroke-width', 2)
           element.setAttribute('stroke-width', 2 / this.imageViewer.getScale())
           break
           
@@ -526,6 +586,7 @@ class ImageAnnotator extends HTMLElement {
           element.setAttribute('ry', annotation.ry)
           element.setAttribute('fill', 'rgba(0, 0, 255, 0.3)')
           element.setAttribute('stroke', 'blue')
+          element.setAttribute('data-original-stroke-width', 2)
           element.setAttribute('stroke-width', 2 / this.imageViewer.getScale())
           break
           
@@ -537,6 +598,7 @@ class ImageAnnotator extends HTMLElement {
           element.setAttribute('points', pointsString)
           element.setAttribute('fill', 'rgba(0, 255, 0, 0.3)')
           element.setAttribute('stroke', 'green')
+          element.setAttribute('data-original-stroke-width', 2)
           element.setAttribute('stroke-width', 2 / this.imageViewer.getScale())
           break
       }
@@ -585,6 +647,16 @@ class ImageAnnotator extends HTMLElement {
       console.error('Failed to import annotations:', e)
       return false
     }
+  }
+  
+  // Add method for programmatically setting the tool mode
+  setToolMode(mode) {
+    if (['pan', 'rect', 'ellipse', 'polygon'].includes(mode)) {
+      this.currentTool = mode
+      this.updateToolUI()
+      return true
+    }
+    return false
   }
 }
 
